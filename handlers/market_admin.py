@@ -12,7 +12,6 @@ from services.market import refresh_rate, snapshot
 from utils import esc, safe_edit
 
 router = Router()
-router.callback_query.filter(F.from_user.id.in_(set()))
 
 
 class MarketStates(StatesGroup):
@@ -70,7 +69,7 @@ async def save_key(message: Message, state: FSMContext) -> None:
     await db.set_setting("usd_rate_api_key", value)
     await state.clear()
     ok, detail = await refresh_rate()
-    await message.answer(("✅ کلید ذخیره و اتصال تست شد." if ok else f"⚠️ کلید ذخیره شد، اما تست ناموفق بود: <code>{esc(detail)}</code>") , reply_markup=kb.admin_back("market_admin"))
+    await message.answer("✅ کلید ذخیره و اتصال تست شد." if ok else f"⚠️ کلید ذخیره شد، اما تست ناموفق بود: <code>{esc(detail)}</code>", reply_markup=kb.admin_back("market_admin"))
 
 
 @router.callback_query(F.data == "market_set_url")
@@ -93,7 +92,7 @@ async def save_url(message: Message, state: FSMContext) -> None:
     await db.set_setting("usd_rate_url", value)
     await state.clear()
     ok, detail = await refresh_rate()
-    await message.answer(("✅ آدرس ذخیره و اتصال تست شد." if ok else f"⚠️ آدرس ذخیره شد، اما تست ناموفق بود: <code>{esc(detail)}</code>") , reply_markup=kb.admin_back("market_admin"))
+    await message.answer("✅ آدرس ذخیره و اتصال تست شد." if ok else f"⚠️ آدرس ذخیره شد، اما تست ناموفق بود: <code>{esc(detail)}</code>", reply_markup=kb.admin_back("market_admin"))
 
 
 @router.callback_query(F.data == "market_refresh")
