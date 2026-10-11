@@ -1,4 +1,4 @@
-"""SimPars - بررسی خودکار سفارش‌ها در پس‌زمینه"""
+"""Background order synchronization and pricing safety worker."""
 from __future__ import annotations
 
 import asyncio
@@ -7,28 +7,36 @@ import logging
 from aiogram import Bot
 
 import database as db
-from config import CHECK_INTERVAL
+from config import CHECK_INTERVAL, MARKET_INTERVAL
 from services.fivesim import FiveSimError
+from services.market import refresh_rate
 from services.orders import sync_order
 
 log = logging.getLogger(__name__)
 
 
 async def order_worker(bot: Bot) -> None:
-    log.info("order worker started")
+    log.info("order and market workers started")
+    market_tick = 0
     while True:
         try:
+            if market_tick <= 0:
+                ok, detail = await refresh_rate()
+                if not ok:
+                    log.warning("market rate refresh skipped: %s", detail)
+                market_tick = max(1, MARKET_INTERVAL // CHECK_INTERVAL)
+            market_tick -= 1
             if await db.get_setting("fivesim_api"):
                 for order in await db.active_orders():
                     try:
                         await sync_order(bot, order, notify=True)
                     except FiveSimError as exc:
                         log.warning("sync order %s: %s", order["id"], exc)
-                    except Exception:  # noqa: BLE001
+                    except Exception:
                         log.exception("sync order %s failed", order["id"])
                     await asyncio.sleep(0.3)
         except asyncio.CancelledError:
             raise
-        except Exception:  # noqa: BLE001
-            log.exception("order worker loop error")
+        except Exception:
+            log.exception("background worker loop error")
         await asyncio.sleep(CHECK_INTERVAL)

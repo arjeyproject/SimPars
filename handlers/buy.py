@@ -1,4 +1,4 @@
-"""SimPars - خرید شماره مجازی"""
+"""Virtual-number storefront handlers."""
 from __future__ import annotations
 
 import asyncio
@@ -15,6 +15,7 @@ import texts
 from config import ORDER_LIFETIME
 from services import fivesim
 from services.fivesim import FiveSimClient, FiveSimError, humanize
+from services.market import sales_allowed
 from services.orders import code_message, refund, sync_order
 from services.payments import notify_admins
 from utils import calc_price, country_title, esc, safe_edit, service_title
@@ -26,12 +27,12 @@ _locks: defaultdict[int, asyncio.Lock] = defaultdict(asyncio.Lock)
 
 
 async def _pricing() -> tuple[float, float]:
-    return await db.get_float("rate", 1000), await db.get_float("profit_percent", 30)
+    return await db.get_float("rate", 1000), max(0.0, await db.get_float("profit_percent", 30))
 
 
 @router.callback_query(F.data == "buy")
 async def cb_buy(call: CallbackQuery) -> None:
-    if not await db.get_setting("fivesim_api"):
+    if not await db.get_setting("fivesim_api") or not await sales_allowed():
         await call.answer(texts.SALES_DISABLED, show_alert=True)
         return
     await safe_edit(call, texts.CHOOSE_SERVICE, kb.services_kb())
@@ -46,6 +47,9 @@ async def cb_service(call: CallbackQuery) -> None:
     except ValueError:
         await call.answer()
         return
+    if not await sales_allowed():
+        await call.answer(texts.SALES_DISABLED, show_alert=True)
+        return
     await call.answer("⏳ در حال دریافت قیمت‌ها...")
     try:
         prices = await fivesim.get_product_prices(product)
@@ -57,17 +61,12 @@ async def cb_service(call: CallbackQuery) -> None:
         return
     countries = await fivesim.countries_safe()
     rate, profit = await _pricing()
-    items = sorted(
-        ((country, calc_price(cost, rate, profit)) for country, (_, cost, _) in prices.items()),
-        key=lambda item: item[1],
-    )
+    items = sorted(((country, calc_price(cost, rate, profit)) for country, (_, cost, _) in prices.items()), key=lambda item: item[1])
     pages = max(1, math.ceil(len(items) / PAGE_SIZE))
     page = min(max(0, page), pages - 1)
     chunk = items[page * PAGE_SIZE:(page + 1) * PAGE_SIZE]
     buttons = [(country, f"{country_title(country, countries)} • {price:,} ت") for country, price in chunk]
-    text = texts.CHOOSE_COUNTRY.format(
-        service=f"<b>{service_title(product)}</b>", count=len(items), page=page + 1, pages=pages,
-    )
+    text = texts.CHOOSE_COUNTRY.format(service=f"<b>{service_title(product)}</b>", count=len(items), page=page + 1, pages=pages)
     await safe_edit(call, text, kb.countries_kb(product, buttons, page, pages))
 
 
@@ -77,6 +76,9 @@ async def cb_country(call: CallbackQuery) -> None:
         _, product, country = call.data.split(":")
     except ValueError:
         await call.answer()
+        return
+    if not await sales_allowed():
+        await call.answer(texts.SALES_DISABLED, show_alert=True)
         return
     try:
         prices = await fivesim.get_product_prices(product)
@@ -92,14 +94,8 @@ async def cb_country(call: CallbackQuery) -> None:
     price = calc_price(cost, rate, profit)
     user = await db.get_user(call.from_user.id)
     balance = user["balance"] if user else 0
-    enough = balance >= price
     countries = await fivesim.countries_safe()
-    text = texts.CONFIRM.format(
-        service=service_title(product), country=country_title(country, countries),
-        count=count, price=price, balance=balance,
-        note=texts.NOTE_OK if enough else texts.NOTE_LOW,
-    )
-    await safe_edit(call, text, kb.confirm_kb(product, country, enough))
+    await safe_edit(call, texts.CONFIRM.format(service=service_title(product), country=country_title(country, countries), count=count, price=price, balance=balance, note=texts.NOTE_OK if balance >= price else texts.NOTE_LOW), kb.confirm_kb(product, country, balance >= price))
     await call.answer()
 
 
@@ -110,6 +106,9 @@ async def cb_purchase(call: CallbackQuery) -> None:
     except ValueError:
         await call.answer()
         return
+    if not await sales_allowed():
+        await call.answer(texts.SALES_DISABLED, show_alert=True)
+        return
     user_id = call.from_user.id
     lock = _locks[user_id]
     if lock.locked():
@@ -117,7 +116,7 @@ async def cb_purchase(call: CallbackQuery) -> None:
         return
     async with lock:
         token = await db.get_setting("fivesim_api")
-        if not token:
+        if not token or not await sales_allowed():
             await call.answer(texts.SALES_DISABLED, show_alert=True)
             return
         await call.answer("⏳ در حال دریافت شماره...")
@@ -133,13 +132,9 @@ async def cb_purchase(call: CallbackQuery) -> None:
         operator, cost, _ = info
         rate, profit = await _pricing()
         price = calc_price(cost, rate, profit)
-
         if not await db.deduct_balance(user_id, price):
             user = await db.get_user(user_id)
-            await safe_edit(
-                call, texts.INSUFFICIENT.format(price=price, balance=user["balance"] if user else 0),
-                kb.markup([[kb.btn("💳 شارژ کیف پول", "wallet")], [kb.btn("🏠 منوی اصلی", "home")]]),
-            )
+            await safe_edit(call, texts.INSUFFICIENT.format(price=price, balance=user["balance"] if user else 0), kb.markup([[kb.btn("💳 شارژ کیف پول", "wallet")], [kb.btn("🏠 منوی اصلی", "home")]]))
             return
         try:
             data = await FiveSimClient(token).buy(country, operator, product)
@@ -148,23 +143,12 @@ async def cb_purchase(call: CallbackQuery) -> None:
             log.warning("buy failed %s/%s/%s: %s", country, operator, product, exc)
             if "balance" in str(exc).lower() or "rating" in str(exc).lower():
                 await notify_admins(call.bot, f"⚠️ <b>هشدار:</b> خرید ناموفق به دلیل موجودی/امتیاز پنل 5Sim!\n<code>{esc(exc)}</code>")
-            await safe_edit(
-                call, f"❌ <b>خرید انجام نشد</b>\n\n{humanize(exc)}\n\n💰 مبلغ به کیف پولت برگشت.",
-                kb.back_to(f"srv:{product}:0"),
-            )
+            await safe_edit(call, f"❌ <b>خرید انجام نشد</b>\n\n{humanize(exc)}\n\n💰 مبلغ به کیف پولت برگشت.", kb.back_to(f"srv:{product}:0"))
             return
-
         phone = str(data.get("phone") or "")
-        order_id = await db.create_order(
-            user_id, int(data["id"]), phone, product, country, str(data.get("operator") or operator),
-            price, ORDER_LIFETIME,
-        )
+        order_id = await db.create_order(user_id, int(data["id"]), phone, product, country, str(data.get("operator") or operator), price, ORDER_LIFETIME)
     countries = await fivesim.countries_safe()
-    text = texts.ORDER_CREATED.format(
-        order_id=order_id, service=service_title(product), country=country_title(country, countries),
-        phone=esc(phone), price=price, minutes=ORDER_LIFETIME // 60,
-    )
-    await safe_edit(call, text, kb.order_kb(order_id))
+    await safe_edit(call, texts.ORDER_CREATED.format(order_id=order_id, service=service_title(product), country=country_title(country, countries), phone=esc(phone), price=price, minutes=ORDER_LIFETIME // 60), kb.order_kb(order_id))
 
 
 async def _own_order(call: CallbackQuery):
@@ -173,9 +157,7 @@ async def _own_order(call: CallbackQuery):
     except (ValueError, IndexError):
         return None
     order = await db.get_order(order_id)
-    if not order or order["user_id"] != call.from_user.id:
-        return None
-    return order
+    return order if order and order["user_id"] == call.from_user.id else None
 
 
 @router.callback_query(F.data.startswith("chk:"))
@@ -199,9 +181,7 @@ async def cb_check(call: CallbackQuery) -> None:
         await safe_edit(call, code_message(order, result.get("code") or "", result.get("text") or ""), markup)
     elif status == "TIMEOUT":
         await call.answer("⌛️ مهلت تموم شد و مبلغ برگشت خورد.", show_alert=True)
-        await safe_edit(call, texts.REFUNDED.format(order_id=order["id"], phone=esc(order["phone"]),
-                                                    price=order["price"], reason=texts.REASON_TIMEOUT),
-                        kb.back_main())
+        await safe_edit(call, texts.REFUNDED.format(order_id=order["id"], phone=esc(order["phone"]), price=order["price"], reason=texts.REASON_TIMEOUT), kb.back_main())
     else:
         await call.answer(texts.WAITING_CODE, show_alert=True)
 
@@ -222,9 +202,7 @@ async def cb_cancel(call: CallbackQuery) -> None:
         return
     if await refund(call.bot, order, "CANCELED", texts.REASON_USER, notify=False):
         await call.answer("✅ سفارش لغو و مبلغ برگشت داده شد.")
-        await safe_edit(call, texts.REFUNDED.format(order_id=order["id"], phone=esc(order["phone"]),
-                                                    price=order["price"], reason=texts.REASON_USER),
-                        kb.markup([[kb.btn("🛒 خرید شماره جدید", "buy")], [kb.btn("🏠 منوی اصلی", "home")]]))
+        await safe_edit(call, texts.REFUNDED.format(order_id=order["id"], phone=esc(order["phone"]), price=order["price"], reason=texts.REASON_USER), kb.markup([[kb.btn("🛒 خرید شماره جدید", "buy")], [kb.btn("🏠 منوی اصلی", "home")]]))
     else:
         await call.answer("ℹ️ وضعیت این سفارش قبلاً تغییر کرده.", show_alert=True)
 
@@ -242,5 +220,4 @@ async def cb_finish(call: CallbackQuery) -> None:
             pass
         await db.transition_order(order["id"], ("RECEIVED",), "FINISHED")
     await call.answer("🏁 سفارش تکمیل شد")
-    await safe_edit(call, texts.ORDER_FINISHED.format(order_id=order["id"]),
-                    kb.markup([[kb.btn("🛒 خرید شماره جدید", "buy")], [kb.btn("🏠 منوی اصلی", "home")]]))
+    await safe_edit(call, texts.ORDER_FINISHED.format(order_id=order["id"]), kb.markup([[kb.btn("🛒 خرید شماره جدید", "buy")], [kb.btn("🏠 منوی اصلی", "home")]]))
