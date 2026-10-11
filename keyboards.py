@@ -21,13 +21,7 @@ OWNER_URL = f"https://t.me/{OWNER_USERNAME}"
 INSTAGRAM_URL = f"https://instagram.com/{INSTAGRAM_ID}"
 
 def main_menu(is_admin: bool = False) -> InlineKeyboardMarkup:
-    rows = [
-        [btn("🛒 خرید شماره مجازی", "buy")],
-        [btn("💰 کیف پول", "wallet"), btn("👤 حساب من", "account")],
-        [btn("📦 سفارش‌های من", "orders"), btn("🎁 دعوت دوستان", "referral")],
-        [btn("💬 پشتیبانی", "support"), btn("📚 راهنما", "help")],
-        [btn("📢 کانال ما", url=CHANNEL_URL), btn("📸 اینستاگرام", url=INSTAGRAM_URL)],
-    ]
+    rows = [[btn("🛒 خرید شماره مجازی", "buy")], [btn("💰 کیف پول", "wallet"), btn("👤 حساب من", "account")], [btn("📦 سفارش‌های من", "orders"), btn("🎁 دعوت دوستان", "referral")], [btn("💬 پشتیبانی", "support"), btn("📚 راهنما", "help")], [btn("📢 کانال ما", url=CHANNEL_URL), btn("📸 اینستاگرام", url=INSTAGRAM_URL)]]
     if is_admin:
         rows.append([btn("⚙️ پنل مدیریت", "admin")])
     return markup(rows)
@@ -39,7 +33,11 @@ def back_to(cb: str, text: str = "🔙 بازگشت") -> InlineKeyboardMarkup:
     return markup([[btn(text, cb)], [btn("🏠 منوی اصلی", "home")]])
 
 def join_kb() -> InlineKeyboardMarkup:
-    return markup([[btn("📢 عضویت در کانال سیم‌پارس", url=CHANNEL_URL)], [btn("✅ عضو شدم", "joined")])
+    rows = [
+        [btn("📢 عضویت در کانال سیم‌پارس", url=CHANNEL_URL)],
+        [btn("✅ عضو شدم", "joined")],
+    ]
+    return markup(rows)
 
 def services_kb() -> InlineKeyboardMarkup:
     rows, row = [], []
@@ -61,7 +59,9 @@ def countries_kb(product: str, items: list[tuple[str, str]], page: int, pages: i
     nav.append(btn(f"📄 {page + 1}/{pages}", "noop"))
     if page < pages - 1:
         nav.append(btn("بعدی ▶️", f"srv:{product}:{page + 1}"))
-    rows.extend([nav, [btn("🔄 بروزرسانی قیمت‌ها", f"srv:{product}:{page}")], [btn("🔙 انتخاب سرویس", "buy"), btn("🏠 منوی اصلی", "home")]])
+    rows.append(nav)
+    rows.append([btn("🔄 بروزرسانی قیمت‌ها", f"srv:{product}:{page}")])
+    rows.append([btn("🔙 انتخاب سرویس", "buy"), btn("🏠 منوی اصلی", "home")])
     return markup(rows)
 
 def confirm_kb(product: str, country: str, enough: bool) -> InlineKeyboardMarkup:
@@ -80,7 +80,8 @@ def order_received_kb(order_id: int) -> InlineKeyboardMarkup:
 
 def wallet_kb() -> InlineKeyboardMarkup:
     amounts = [50_000, 100_000, 200_000, 500_000]
-    return markup([[btn(f"💵 {amounts[0]:,} ت", f"dep:{amounts[0]}"), btn(f"💵 {amounts[1]:,} ت", f"dep:{amounts[1]}")], [btn(f"💵 {amounts[2]:,} ت", f"dep:{amounts[2]}"), btn(f"💵 {amounts[3]:,} ت", f"dep:{amounts[3]}")], [btn("✍️ مبلغ دلخواه", "dep_custom")], [btn("🏠 منوی اصلی", "home")]])
+    rows = [[btn(f"💵 {amounts[0]:,} ت", f"dep:{amounts[0]}"), btn(f"💵 {amounts[1]:,} ت", f"dep:{amounts[1]}")], [btn(f"💵 {amounts[2]:,} ت", f"dep:{amounts[2]}"), btn(f"💵 {amounts[3]:,} ت", f"dep:{amounts[3]}")], [btn("✍️ مبلغ دلخواه", "dep_custom")], [btn("🏠 منوی اصلی", "home")]]
+    return markup(rows)
 
 def payment_kb(url: str, track_id: str) -> InlineKeyboardMarkup:
     return markup([[btn("💳 پرداخت آنلاین", url=url)], [btn("✅ پرداخت کردم، بررسی شود", f"vfy:{track_id}")], [btn("🏠 منوی اصلی", "home")]])
@@ -96,7 +97,8 @@ def referral_kb(link: str) -> InlineKeyboardMarkup:
     return markup([[btn("📤 اشتراک‌گذاری لینک", url=share)], [btn("🏠 منوی اصلی", "home")]])
 
 def admin_menu(force_join: str, maintenance: str) -> InlineKeyboardMarkup:
-    return markup([[btn("📊 آمار و گزارشات", "adm_stats")], [btn("🔑 تنظیمات 5Sim", "panel_5sim"), btn("💳 درگاه زرین‌پال", "panel_zibal")], [btn("💹 قیمت‌گذاری و مالی", "panel_price"), btn("👥 مدیریت کاربران", "adm_user")], [btn("📢 پیام همگانی", "adm_bc"), btn("📝 متن پشتیبانی", "aset:support_text")], [btn(f"🔒 جوین اجباری: {onoff(force_join)}", "atog:force_join")], [btn(f"🛠 حالت تعمیرات: {onoff(maintenance)}", "atog:maintenance")], [btn("🏠 منوی اصلی", "home")]])
+    rows = [[btn("📊 آمار و گزارشات", "adm_stats")], [btn("🔑 تنظیمات 5Sim", "panel_5sim"), btn("💳 درگاه زرین‌پال", "panel_zibal")], [btn("💹 قیمت‌گذاری و مالی", "panel_price"), btn("👥 مدیریت کاربران", "adm_user")], [btn("📢 پیام همگانی", "adm_bc"), btn("📝 متن پشتیبانی", "aset:support_text")], [btn(f"🔒 جوین اجباری: {onoff(force_join)}", "atog:force_join")], [btn(f"🛠 حالت تعمیرات: {onoff(maintenance)}", "atog:maintenance")], [btn("🏠 منوی اصلی", "home")]]
+    return markup(rows)
 
 def admin_back(cb: str = "admin") -> InlineKeyboardMarkup:
     return markup([[btn("🔙 بازگشت به پنل", cb)])
