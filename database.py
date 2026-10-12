@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import os
 import time
+
 import aiosqlite
+
 from config import DB_PATH
 
-DEFAULT_SETTINGS = {"fivesim_api":"", "zibal_merchant":"", "zibal_sandbox":"0", "zibal_callback":"", "rate":"1200", "rate_source":"manual fallback", "rate_updated_at":"0", "pricing_paused":"0", "usd_rate_api_key":"", "usd_rate_url":"", "profit_percent":"30", "min_deposit":"10000", "max_deposit":"10000000", "force_join":"1", "maintenance":"0", "referral_percent":"5", "support_text":""}
+DEFAULT_SETTINGS = {"fivesim_api":"", "zibal_merchant":"", "zibal_sandbox":"0", "zibal_callback":"", "rate":"1200", "rate_source":"manual fallback", "rate_updated_at":"0", "pricing_paused":"0", "usd_rate_api_key":"", "usd_rate_url":"", "profit_percent":"30", "min_deposit":"10000", "max_deposit":"10000000", "force_join":"1", "force_join_channel":"", "maintenance":"0", "referral_percent":"5", "support_text":""}
 SUCCESS_STATUSES = ("RECEIVED", "FINISHED")
 _db: aiosqlite.Connection | None = None
 
