@@ -1,4 +1,4 @@
-"""5SIM API client with complete country/operator availability."""
+"""Provider client with complete country/operator availability."""
 from __future__ import annotations
 import asyncio, json, time
 from typing import Any
@@ -9,11 +9,11 @@ PRICE_CACHE_TTL=60
 COUNTRY_CACHE_TTL=6*3600
 _price_cache={}; _options_cache={}; _all_prices_cache=None; _country_cache={"time":0.0,"data":{}}
 class FiveSimError(Exception): pass
-ERROR_MESSAGES={"unauthorized":"🔑 API پنل 5Sim نامعتبر است یا ثبت نشده.","no free phones":"😕 شماره‌ای برای این کشور موجود نیست.","not enough user balance":"⚠️ موجودی تامین‌کننده کافی نیست.","not enough rating":"⚠️ امکان خرید موقتاً وجود ندارد.","no product":"❌ این سرویس موجود نیست.","bad country":"❌ کشور نامعتبر است.","bad operator":"❌ اپراتور نامعتبر است.","server offline":"🔌 سرور تامین‌کننده در دسترس نیست.","order not found":"↩️ سفارش حذف شده؛ مبلغ به کیف پول برمی‌گردد.","order expired":"↩️ سفارش منقضی شده؛ مبلغ برمی‌گردد.","banned":"🚫 سفارش بن شد؛ مبلغ برمی‌گردد.","ban":"🚫 سفارش بن شد؛ مبلغ برمی‌گردد.","network error":"🌐 خطا در اتصال به سرور."}
+ERROR_MESSAGES={"unauthorized":"🔑 اتصال سرویس فروش تنظیم نشده یا کلید آن نامعتبر است.","no free phones":"😕 شماره‌ای برای این کشور موجود نیست.","not enough user balance":"⚠️ موجودی تامین‌کننده موقتاً کافی نیست.","not enough rating":"⚠️ امکان خرید موقتاً وجود ندارد.","no product":"❌ این سرویس موجود نیست.","bad country":"❌ کشور نامعتبر است.","bad operator":"❌ اپراتور نامعتبر است.","server offline":"🔌 سرور تامین‌کننده موقتاً در دسترس نیست.","order not found":"↩️ سفارش دیگر وجود ندارد؛ مبلغ به کیف پول برمی‌گردد.","order expired":"↩️ سفارش منقضی شده؛ مبلغ برمی‌گردد.","banned":"🚫 سفارش مسدود شد؛ مبلغ به کیف پول برمی‌گردد.","ban":"🚫 سفارش مسدود شد؛ مبلغ به کیف پول برمی‌گردد.","network error":"🌐 خطا در اتصال به سرویس فروش."}
 def humanize(error):
-    text=str(error).lower(); return next((v for k,v in ERROR_MESSAGES.items() if k in text),"⚠️ خطا در ارتباط با تامین‌کننده.")
+    text=str(error).lower(); return next((v for k,v in ERROR_MESSAGES.items() if k in text),"⚠️ خطا در ارتباط با سرویس فروش.")
 async def _request(path,token=None,params=None):
-    headers={"Accept":"application/json"};
+    headers={"Accept":"application/json"}
     if token: headers["Authorization"]=f"Bearer {token}"
     try:
         async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
