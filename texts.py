@@ -1,59 +1,33 @@
-"""SimPars - متن‌ها، سرویس‌ها و کشورها"""
+"""SimPars texts, services and countries."""
 from config import CHANNEL_USERNAME, INSTAGRAM_ID, OWNER_USERNAME
-
-SERVICES = [
-    ("telegram", "✈️", "تلگرام"), ("whatsapp", "💚", "واتساپ"), ("instagram", "📸", "اینستاگرام"),
-    ("google", "🔎", "گوگل / جیمیل"), ("openai", "🤖", "ChatGPT"), ("facebook", "📘", "فیسبوک"),
-    ("twitter", "🐦", "توییتر (X)"), ("tiktok", "🎵", "تیک‌تاک"), ("discord", "🎮", "دیسکورد"),
-    ("microsoft", "🪟", "مایکروسافت"), ("amazon", "📦", "آمازون"), ("snapchat", "👻", "اسنپ‌چت"),
-    ("viber", "💜", "وایبر"), ("signal", "🔵", "سیگنال"), ("linkedin", "💼", "لینکدین"),
-    ("yahoo", "📨", "یاهو"), ("netflix", "🎬", "نتفلیکس"), ("paypal", "💳", "پی‌پال"),
-    ("steam", "🕹", "استیم"), ("imo", "💬", "ایمو"), ("line", "🟢", "لاین"),
-    ("wechat", "🟩", "وی‌چت"), ("uber", "🚕", "اوبر"), ("other", "🌐", "سایر سرویس‌ها"),
-]
-SERVICE_MAP = {code: (emoji, title) for code, emoji, title in SERVICES}
-
-COUNTRY_FA = {"russia":"روسیه", "usa":"آمریکا", "england":"انگلیس", "canada":"کانادا", "germany":"آلمان", "france":"فرانسه", "netherlands":"هلند", "italy":"ایتالیا", "spain":"اسپانیا", "portugal":"پرتغال", "sweden":"سوئد", "finland":"فنلاند", "poland":"لهستان", "romania":"رومانی", "estonia":"استونی", "latvia":"لتونی", "lithuania":"لیتوانی", "ukraine":"اوکراین", "georgia":"گرجستان", "armenia":"ارمنستان", "azerbaijan":"آذربایجان", "kazakhstan":"قزاقستان", "uzbekistan":"ازبکستان", "kyrgyzstan":"قرقیزستان", "tajikistan":"تاجیکستان", "turkey":"ترکیه", "afghanistan":"افغانستان", "pakistan":"پاکستان", "india":"هند", "bangladesh":"بنگلادش", "china":"چین", "hongkong":"هنگ‌کنگ", "indonesia":"اندونزی", "malaysia":"مالزی", "philippines":"فیلیپین", "vietnam":"ویتنام", "thailand":"تایلند", "cambodia":"کامبوج", "myanmar":"میانمار", "laos":"لائوس", "egypt":"مصر", "nigeria":"نیجریه", "kenya":"کنیا", "southafrica":"آفریقای جنوبی", "morocco":"مراکش", "ghana":"غنا", "mexico":"مکزیک", "brazil":"برزیل", "colombia":"کلمبیا", "argentina":"آرژانتین", "chile":"شیلی", "peru":"پرو", "iraq":"عراق", "saudiarabia":"عربستان", "israel":"اسرائیل", "japan":"ژاپن", "southkorea":"کره جنوبی", "australia":"استرالیا", "belgium":"بلژیک", "austria":"اتریش", "czech":"چک", "greece":"یونان", "ireland":"ایرلند", "serbia":"صربستان", "bulgaria":"بلغارستان", "moldova":"مولداوی", "belarus":"بلاروس", "mongolia":"مغولستان", "nepal":"نپال", "srilanka":"سریلانکا"}
-
-ORDER_STATUS = {"PENDING":"⏳ در انتظار کد", "RECEIVED":"✅ کد دریافت شد", "FINISHED":"🏁 تکمیل شده", "CANCELED":"↩️ لغو شده (بازگشت وجه)", "TIMEOUT":"⌛️ منقضی (بازگشت وجه)"}
-
-WELCOME = "🌟 <b>سلام {name} عزیز، به سیم‌پارس خوش اومدی!</b> 🌟\n\n📱 شماره مجازی سریع برای سرویس‌های محبوب از کشورهای مختلف\n⚡️ تحویل خودکار • 🛡 بازگشت وجه خودکار • 💳 پرداخت امن\n\n👇 از منوی زیر شروع کن:"
-FORCE_JOIN = "🔒 <b>برای استفاده از ربات، اول عضو کانال ما شو!</b>\n\n📢 کانال رسمی: " + CHANNEL_USERNAME + "\n\n✅ بعد از عضویت، روی دکمه «عضو شدم» بزن."
-BANNED = "🚫 <b>دسترسی شما به ربات مسدود شده است.</b>\n\nدر صورت اعتراض با پشتیبانی در ارتباط باشید: @" + OWNER_USERNAME
-MAINTENANCE = "🛠 <b>ربات در حال بروزرسانی است</b>\n\n⏳ به‌زودی با امکانات بهتر برمی‌گردیم. ممنون از صبوری‌ت 💙"
-CONTACT_REQUIRED = "🔐 برای فعال‌سازی حساب و ادامه استفاده، لطفاً شماره تماس خودت را با دکمه زیر ارسال کن."
-CHOOSE_SERVICE = "🛒 <b>خرید شماره مجازی</b>\n\n📲 سرویس مورد نظر را انتخاب کن:\n💡 قیمت‌ها لحظه‌ای از 5Sim دریافت می‌شوند."
-CHOOSE_COUNTRY = "{service}\n\n🌍 <b>{count}</b> کشور موجود، مرتب‌شده از ارزان‌ترین\n📄 صفحه {page} از {pages}\n\n👇 کشور مورد نظر را انتخاب کن:"
-LOADING_COUNTRIES = "🌍 <b>در حال بررسی کشورها...</b>\n\n🔌 اتصال به 5Sim  ▓░░░\n📡 دریافت موجودی   ▓▓░░\n💰 محاسبه قیمت‌ها   ▓▓▓░\n✨ آماده‌سازی فهرست   ▓▓▓▓"
-LOADING_PURCHASE = "🛒 <b>در حال آماده‌سازی سفارش...</b>\n\n🔐 بررسی موجودی کیف پول  ▓▓░░\n📡 رزرو شماره از تامین‌کننده  ▓▓▓░\n🧾 ثبت سفارش  ▓▓▓▓"
-NO_NUMBERS = "😕 <b>فعلاً شماره‌ای برای این سرویس موجود نیست.</b>\n\nلطفاً کمی بعد دوباره امتحان کن یا سرویس دیگری انتخاب کن."
-SALES_DISABLED = "⛔️ فروش موقتاً غیرفعال است. لطفاً بعداً تلاش کن."
-CONFIRM = "🧾 <b>پیش‌فاکتور خرید</b>\n\n📲 سرویس: <b>{service}</b>\n🌍 کشور: <b>{country}</b>\n📦 موجودی: <b>{count:,}</b>\n💰 قیمت: <b>{price:,} تومان</b>\n\n👛 موجودی شما: <b>{balance:,} تومان</b>\n\n{note}"
-NOTE_OK = "✅ برای دریافت شماره روی «تأیید و خرید» بزن."
-NOTE_LOW = "⚠️ موجودی کافی نیست! اول کیف پولت را شارژ کن 👇"
-INSUFFICIENT = "⚠️ <b>موجودی کیف پولت کافی نیست!</b>\n\n💰 مبلغ لازم: <b>{price:,} تومان</b>\n👛 موجودی شما: <b>{balance:,} تومان</b>"
-ORDER_CREATED = "🎉 <b>شماره با موفقیت خریداری شد!</b>\n\n🆔 کد سفارش: <code>#{order_id}</code>\n📲 سرویس: <b>{service}</b>\n🌍 کشور: <b>{country}</b>\n📞 شماره: <code>{phone}</code>\n💰 مبلغ: <b>{price:,} تومان</b>\n\n📩 کد تأیید خودکار همین‌جا ارسال می‌شود.\n⌛️ مهلت دریافت کد: <b>{minutes} دقیقه</b>\n🛡 در صورت عدم دریافت یا بن شدن شماره، مبلغ خودکار به کیف پول برمی‌گردد."
-CODE_RECEIVED = "📩 <b>کد تأیید دریافت شد!</b>\n\n🆔 سفارش: <code>#{order_id}</code>\n📞 شماره: <code>{phone}</code>\n🔑 کد: <code>{code}</code>\n\n💬 متن پیامک:\n<blockquote>{text}</blockquote>"
-WAITING_CODE = "⏳ هنوز کدی نیامده... چند ثانیه دیگر دوباره بررسی کن."
-REFUNDED = "↩️ <b>بازگشت وجه انجام شد</b>\n\n🆔 سفارش: <code>#{order_id}</code>\n📞 شماره: <code>{phone}</code>\n💰 مبلغ <b>{price:,} تومان</b> به کیف پولت برگشت ✅\n\n{reason}"
-REASON_TIMEOUT = "⌛️ کدی در مهلت مقرر دریافت نشد."
-REASON_BANNED = "🚫 شماره یا سفارش توسط تامین‌کننده مسدود شد؛ مبلغ به‌صورت خودکار برگشت خورد."
-REASON_USER = "🙋‍♂️ لغو توسط شما."
-ORDER_FINISHED = "🏁 <b>سفارش #{order_id} با موفقیت تکمیل شد.</b>\n\n💙 ممنون که سیم‌پارس را انتخاب کردی!"
-WALLET = "💰 <b>کیف پول شما</b>\n\n👛 موجودی فعلی: <b>{balance:,} تومان</b>\n\n💳 مبلغ شارژ را انتخاب کن یا مبلغ دلخواهت را وارد کن:\n🔻 حداقل: <b>{min:,}</b> تومان | 🔺 حداکثر: <b>{max:,}</b> تومان"
-ENTER_AMOUNT = "✍️ مبلغ مورد نظرت را به <b>تومان</b> وارد کن:\n\nمثال: <code>150000</code>"
-BAD_AMOUNT = "❌ مبلغ نامعتبر است! مبلغ باید بین <b>{min:,}</b> تا <b>{max:,}</b> تومان باشد."
-GATEWAY_DISABLED = "⛔️ درگاه پرداخت فعلاً غیرفعال است. لطفاً با پشتیبانی تماس بگیر."
-PAYMENT_CREATED = "🧾 <b>فاکتور شارژ کیف پول</b>\n\n💵 مبلغ: <b>{amount:,} تومان</b>\n🔢 کد پیگیری: <code>{track}</code>\n\n1️⃣ پرداخت آنلاین را انجام بده.\n2️⃣ بعد از پرداخت، بررسی را بزن.\n\n🔐 پرداخت امن با زرین‌پال"
-PAYMENT_SUCCESS = "✅ <b>پرداخت موفق!</b>\n\n💵 مبلغ <b>{amount:,} تومان</b> به کیف پولت اضافه شد.\n🧾 شماره مرجع: <code>{ref}</code>\n👛 موجودی جدید: <b>{balance:,} تومان</b>\n\n🛒 حالا می‌توانی شماره بخری!"
-ACCOUNT = "👤 <b>حساب کاربری</b>\n\n🆔 شناسه: <code>{uid}</code>\n👤 نام: <b>{name}</b>\n🔗 یوزرنیم: {username}\n👛 موجودی: <b>{balance:,} تومان</b>\n📦 خریدهای موفق: <b>{orders}</b>\n💸 مجموع خرید: <b>{spent:,} تومان</b>\n👥 زیرمجموعه‌ها: <b>{refs}</b> نفر\n📅 تاریخ عضویت: <b>{joined}</b>"
-NO_ORDERS = "📭 <b>هنوز سفارشی ثبت نکردی!</b>\n\n🛒 از بخش خرید اولین شماره‌ات را بگیر."
-REFERRAL = "🎁 <b>دعوت از دوستان</b>\n\n🔥 از هر شارژ دوستت <b>{percent}%</b> هدیه بگیر!\n\n👥 دعوت‌شده‌ها: <b>{count}</b> نفر\n\n🔗 لینک اختصاصی:\n<code>{link}</code>"
-DEFAULT_SUPPORT = "💬 <b>پشتیبانی سیم‌پارس</b>\n\n🕘 پاسخگویی: همه‌روزه ۹ تا ۲۴\n\n👨‍💻 پشتیبانی: @" + OWNER_USERNAME + "\n📢 کانال: " + CHANNEL_USERNAME + "\n📸 اینستاگرام: @" + INSTAGRAM_ID + "\n\n✍️ کد سفارش یا پیگیری را هنگام پیام ارسال کن."
-HELP = "📚 <b>راهنمای استفاده</b>\n\n1️⃣ کیف پول را شارژ کن.\n2️⃣ سرویس و کشور را انتخاب کن.\n3️⃣ خرید را تأیید کن.\n4️⃣ کد خودکار ارسال می‌شود.\n\n🛡 اگر کد نیاید، سفارش منقضی شود یا شماره بن شود، مبلغ به کیف پول برمی‌گردد.\n\n💬 پشتیبانی: @" + OWNER_USERNAME
-UNKNOWN = "🤔 از دکمه‌های زیر استفاده کن 👇"
-ADMIN_HOME = "⚙️ <b>پنل مدیریت سیم‌پارس</b>\n\n👥 کاربران: <b>{users:,}</b>\n⏳ سفارش‌های فعال: <b>{active}</b>\n🔑 API 5Sim: {fivesim}\n💳 درگاه زرین‌پال: {zibal}\n\n👇 انتخاب کن:"
-ADMIN_STATS = "📊 <b>آمار و گزارشات</b>\n\n👥 کاربران: <b>{users:,}</b>\n🆕 ۲۴ ساعت اخیر: <b>{new_users:,}</b>\n🚫 مسدود: <b>{banned:,}</b>\n\n📦 سفارش‌ها: <b>{orders:,}</b>\n✅ موفق: <b>{success:,}</b>\n⏳ فعال: <b>{active:,}</b>\n💰 فروش: <b>{sales:,} تومان</b>\n📅 فروش امروز: <b>{sales_today:,} تومان</b>\n\n💳 شارژها: <b>{deposits:,} تومان</b>\n👛 موجودی‌ها: <b>{balances:,} تومان</b>\n🔑 موجودی 5Sim: <b>{fs_balance}</b>"
-ADMIN_5SIM = "🔑 <b>تنظیمات 5Sim</b>\n\n🔐 API: <code>{key}</code>\n📡 وضعیت: {status}\n💰 موجودی: <b>{balance}</b>"
-ADMIN_ZIBAL = "💳 <b>تنظیمات زرین‌پال</b>\n\n🔐 مرچنت: <code>{merchant}</code>\n🧪 تست: {sandbox}\n🌐 Callback: <code>{callback}</code>\n📡 وضعیت: {status}"
-ADMIN_PRICE = "💹 <b>قیمت‌گذاری</b>\n\n💱 نرخ: <b>{rate:,g} تومان</b>\n📈 سود: <b>{profit}%</b>\n⬇️ حداقل شارژ: <b>{min:,} تومان</b>\n⬆️ حداکثر شارژ: <b>{max:,} تومان</b>\n🎁 رفرال: <b>{ref}%</b>\n\n🧮 قیمت نمونه ۱۰ واحد: <b>{sample:,} تومان</b>"
+SERVICES=[("telegram","✈️","Telegram"),("whatsapp","💚","WhatsApp"),("instagram","📸","Instagram"),("google","🔎","Google"),("openai","🤖","ChatGPT"),("facebook","📘","Facebook"),("twitter","🐦","Twitter"),("tiktok","🎵","TikTok"),("discord","🎮","Discord"),("microsoft","🪟","Microsoft"),("amazon","📦","Amazon"),("snapchat","👻","Snapchat"),("viber","🪻","Viber"),("signal","🔵","Signal"),("linkedin","💼","LinkedIn"),("yahoo","📨","Yahoo"),("netflix","🎬","Netflix"),("paypal","💳","PayPal"),("steam","🕹","Steam"),("imo","💬","IMO"),("line","🟢","Line"),("wechat","🟩","WeChat"),("uber","🚕","Uber"),("other","🌐","Other")]
+SERVICE_MAP={code:(emoji,title) for code,emoji,title in SERVICES}
+COUNTRY_EN={"russia":"Russia","usa":"United States","england":"England","canada":"Canada","germany":"Germany","france":"France","netherlands":"Netherlands","italy":"Italy","spain":"Spain","portugal":"Portugal","sweden":"Sweden","finland":"Finland","poland":"Poland","romania":"Romania","estonia":"Estonia","latvia":"Latvia","lithuania":"Lithuania","ukraine":"Ukraine","georgia":"Georgia","armenia":"Armenia","azerbaijan":"Azerbaijan","kazakhstan":"Kazakhstan","uzbekistan":"Uzbekistan","kyrgyzstan":"Kyrgyzstan","tajikistan":"Tajikistan","turkey":"Turkey","afghanistan":"Afghanistan","pakistan":"Pakistan","india":"India","bangladesh":"Bangladesh","china":"China","hongkong":"Hong Kong","indonesia":"Indonesia","malaysia":"Malaysia","philippines":"Philippines","vietnam":"Vietnam","thailand":"Thailand","cambodia":"Cambodia","myanmar":"Myanmar","laos":"Laos","egypt":"Egypt","nigeria":"Nigeria","kenya":"Kenya","southafrica":"South Africa","morocco":"Morocco","ghana":"Ghana","mexico":"Mexico","brazil":"Brazil","colombia":"Colombia","argentina":"Argentina","chile":"Chile","peru":"Peru","iraq":"Iraq","saudiarabia":"Saudi Arabia","israel":"Israel","japan":"Japan","southkorea":"South Korea","australia":"Australia","belgium":"Belgium","austria":"Austria","czech":"Czech Republic","greece":"Greece","ireland":"Ireland","serbia":"Serbia","bulgaria":"Bulgaria","moldova":"Moldova","belarus":"Belarus","mongolia":"Mongolia","nepal":"Nepal","srilanka":"Sri Lanka"}
+# Backward-compatible alias for internal code that may still reference the old name.
+COUNTRY_FA=COUNTRY_EN
+ORDER_STATUS={"PENDING":"⏳ در انتظار کد","RECEIVED":"✅ کد دریافت شد","FINISHED":"🏁 تکمیل شده","CANCELED":"↩️ لغو شده (بازگشت وجه)","TIMEOUT":"⌛️ منقضی شده (بازگشت وجه)"}
+WELCOME="🌟 <b>سلام {name} عزیز، به سیم‌پارس خوش اومدی!</b> 🌟\n\n📱 شماره مجازی سریع برای سرویس‌های محبوب از کشورهای مختلف\n⚡️ تحویل خودکار • 🛡 بازگشت وجه خودکار • 💳 پرداخت امن\n\n👇 از منوی زیر شروع کن:"
+FORCE_JOIN="🔒 <b>برای استفاده از ربات، اول عضو کانال ما شو!</b>\n\n📢 کانال رسمی: "+CHANNEL_USERNAME+"\n\n✅ بعد از عضویت، روی دکمه «عضو شدم» بزن."
+BANNED="🚫 <b>دسترسی شما به ربات مسدود شده است.</b>\n\nدر صورت اعتراض با پشتیبانی در ارتباط باشید: @"+OWNER_USERNAME
+MAINTENANCE="🛠 <b>ربات در حال بروزرسانی است</b>\n\n⏳ به‌زودی با امکانات بهتر برمی‌گردیم. ممنون از صبوری‌ت 💙"
+CONTACT_REQUIRED="🔐 برای فعال‌سازی حساب و ادامه استفاده، لطفاً شماره تماس خودت را با دکمه زیر ارسال کن."
+CHOOSE_SERVICE="🛒 <b>خرید شماره مجازی</b>\n\n📲 سرویس مورد نظر را انتخاب کن:\n💡 قیمت‌ها لحظه‌ای دریافت می‌شوند."
+CHOOSE_COUNTRY="{service}\n\n🌍 <b>{count}</b> کشور موجود، مرتب‌شده از ارزان‌ترین\n📄 صفحه {page} از {pages}\n\n👇 کشور مورد نظر را انتخاب کن:"
+LOADING_COUNTRIES="🌍 <b>در حال بررسی کشورها...</b>\n\n🔌 اتصال ▓░░░\n📡 دریافت موجودی ▓▓░░\n💰 محاسبه قیمت‌ها ▓▓▓░\n✨ آماده‌سازی فهرست ▓▓▓▓"
+LOADING_PURCHASE="🛒 <b>در حال آماده‌سازی سفارش...</b>\n\n🔐 بررسی کیف پول ▓▓░░\n📡 رزرو شماره ▓▓▓░\n🧾 ثبت سفارش ▓▓▓▓"
+NO_NUMBERS="😕 <b>فعلاً شماره‌ای برای این سرویس موجود نیست.</b>\n\nلطفاً کمی بعد دوباره امتحان کن یا سرویس دیگری انتخاب کن."
+SALES_DISABLED="⛔️ فروش موقتاً غیرفعال است."
+CONFIRM="🧾 <b>پیش‌فاکتور خرید</b>\n\n📲 سرویس: <b>{service}</b>\n🌍 کشور: <b>{country}</b>\n📦 موجودی: <b>{count:,}</b>\n💰 قیمت: <b>{price:,} تومان</b>\n\n👛 موجودی شما: <b>{balance:,} تومان</b>\n\n{note}"
+NOTE_OK="✅ برای دریافت شماره روی «تأیید و خرید» بزن."
+NOTE_LOW="⚠️ موجودی کافی نیست! اول کیف پولت را شارژ کن 👇"
+INSUFFICIENT="⚠️ <b>موجودی کیف پولت کافی نیست!</b>\n\n💰 مبلغ لازم: <b>{price:,} تومان</b>\n👛 موجودی شما: <b>{balance:,} تومان</b>"
+ORDER_CREATED="🎉 <b>شماره با موفقیت خریداری شد!</b>\n\n🆔 کد سفارش: <code>#{order_id}</code>\n📲 سرویس: <b>{service}</b>\n🌍 کشور: <b>{country}</b>\n📞 شماره: <code>{phone}</code>\n💰 مبلغ: <b>{price:,} تومان</b>\n\n📩 کد تأیید خودکار همین‌جا ارسال می‌شود.\n⌛️ مهلت دریافت کد: <b>{minutes} دقیقه</b>\n🛡 در صورت عدم دریافت یا بن شدن شماره، مبلغ خودکار به کیف پول برمی‌گردد."
+CODE_RECEIVED="📩 <b>کد تأیید دریافت شد!</b>\n\n🆔 سفارش: <code>#{order_id}</code>\n📞 شماره: <code>{phone}</code>\n🔑 کد: <code>{code}</code>\n\n💬 متن پیامک:\n<blockquote>{text}</blockquote>"
+WAITING_CODE="⏳ هنوز کدی نیامده... چند ثانیه دیگر دوباره بررسی کن."
+REFUNDED="↩️ <b>بازگشت وجه انجام شد</b>\n\n🆔 سفارش: <code>#{order_id}</code>\n📞 شماره: <code>{phone}</code>\n💰 مبلغ <b>{price:,} تومان</b> به کیف پولت برگشت ✅\n\n{reason}"
+REASON_TIMEOUT="⌛️ کدی در مهلت مقرر دریافت نشد."; REASON_BANNED="🚫 شماره یا سفارش مسدود شد؛ مبلغ خودکار برگشت خورد."; REASON_USER="🙋‍♂️ لغو توسط شما."; ORDER_FINISHED="🏁 <b>سفارش #{order_id} تکمیل شد.</b>"
+WALLET="💰 <b>کیف پول شما</b>\n\n👛 موجودی فعلی: <b>{balance:,} تومان</b>\n\n💳 مبلغ شارژ را انتخاب کن یا مبلغ دلخواهت را وارد کن:\n🔻 حداقل: <b>{min:,}</b> تومان | 🔺 حداکثر: <b>{max:,}</b> تومان"; ENTER_AMOUNT="✍️ مبلغ مورد نظرت را به <b>تومان</b> وارد کن:\n\nمثال: <code>150000</code>"; BAD_AMOUNT="❌ مبلغ نامعتبر است! مبلغ باید بین <b>{min:,}</b> تا <b>{max:,}</b> تومان باشد."; GATEWAY_DISABLED="⛔️ درگاه پرداخت فعلاً غیرفعال است."; PAYMENT_CREATED="🧾 <b>فاکتور شارژ کیف پول</b>\n\n💵 مبلغ: <b>{amount:,} تومان</b>\n🔢 کد پیگیری: <code>{track}</code>\n\n🔐 پرداخت امن با زرین‌پال"; PAYMENT_SUCCESS="✅ <b>پرداخت موفق!</b>\n\n💵 مبلغ <b>{amount:,} تومان</b> به کیف پولت اضافه شد.\n🧾 مرجع: <code>{ref}</code>\n👛 موجودی جدید: <b>{balance:,} تومان</b>"
+ACCOUNT="👤 <b>حساب کاربری</b>\n\n🆔 شناسه: <code>{uid}</code>\n👤 نام: <b>{name}</b>\n🔗 یوزرنیم: {username}\n👛 موجودی: <b>{balance:,} تومان</b>\n📦 خریدهای موفق: <b>{orders}</b>\n💸 مجموع خرید: <b>{spent:,} تومان</b>\n👥 زیرمجموعه‌ها: <b>{refs}</b> نفر\n📅 تاریخ عضویت: <b>{joined}</b>"; NO_ORDERS="📭 <b>هنوز سفارشی ثبت نکردی!</b>\n\n🛒 از بخش خرید اولین شماره‌ات را بگیر."; REFERRAL="🎁 <b>دعوت از دوستان</b>\n\n🔥 از هر شارژ دوستت <b>{percent}%</b> هدیه بگیر!\n\n👥 دعوت‌شده‌ها: <b>{count}</b> نفر\n\n🔗 لینک اختصاصی:\n<code>{link}</code>"; DEFAULT_SUPPORT="💬 <b>پشتیبانی سیم‌پارس</b>\n\n🕘 پاسخگویی: همه‌روزه ۹ تا ۲۴\n\n👨‍💻 پشتیبانی: @"+OWNER_USERNAME+"\n📢 کانال: "+CHANNEL_USERNAME+"\n📸 اینستاگرام: @"+INSTAGRAM_ID
+HELP="📚 <b>راهنمای استفاده</b>\n\n1️⃣ کیف پول را شارژ کن.\n2️⃣ سرویس و کشور را انتخاب کن.\n3️⃣ خرید را تأیید کن.\n4️⃣ کد خودکار ارسال می‌شود.\n\n🛡 در صورت عدم دریافت یا مسدودی، مبلغ برگشت می‌خورد.\n\n💬 پشتیبانی: @"+OWNER_USERNAME
+UNKNOWN="🤔 از دکمه‌های زیر استفاده کن 👇"
+ADMIN_HOME="⚙️ <b>پنل مدیریت سیم‌پارس</b>\n\n👥 کاربران: <b>{users:,}</b>\n⏳ سفارش‌های فعال: <b>{active}</b>\n🔑 API: {fivesim}\n💳 درگاه: {zibal}\n\n👇 انتخاب کن:"; ADMIN_STATS="📊 <b>آمار و گزارشات</b>\n\n👥 کاربران: <b>{users:,}</b>\n📦 سفارش‌ها: <b>{orders:,}</b>\n✅ موفق: <b>{success:,}</b>\n⏳ فعال: <b>{active:,}</b>\n💰 فروش: <b>{sales:,} تومان</b>\n💳 شارژها: <b>{deposits:,} تومان</b>\n🔑 موجودی: <b>{fs_balance}</b>"; ADMIN_5SIM="🔑 <b>تنظیمات</b>\n\n🔐 API: <code>{key}</code>\n📡 وضعیت: {status}\n💰 موجودی: <b>{balance}</b>"; ADMIN_ZIBAL="💳 <b>تنظیمات درگاه</b>\n\n🔐 مرچنت: <code>{merchant}</code>\n🧪 تست: {sandbox}\n🌐 Callback: <code>{callback}</code>\n📡 وضعیت: {status}"; ADMIN_PRICE="💹 <b>قیمت‌گذاری</b>\n\n💱 نرخ: <b>{rate:,g} تومان</b>\n📈 سود: <b>{profit}%</b>\n⬇️ حداقل شارژ: <b>{min:,} تومان</b>\n⬆️ حداکثر شارژ: <b>{max:,} تومان</b>\n🎁 رفرال: <b>{ref}%</b>\n\n🧮 قیمت نمونه ۱۰ واحد: <b>{sample:,} تومان</b>"
