@@ -28,7 +28,6 @@ async def init_db() -> None:
         CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
         CREATE INDEX IF NOT EXISTS idx_users_ref ON users(referrer_id);
     """)
-    # Safe migration for databases created by older SimPars versions.
     for column, definition in (("contact_phone", "TEXT"), ("contact_updated_at", "INTEGER")):
         try:
             await _db.execute(f"ALTER TABLE users ADD COLUMN {column} {definition}")
@@ -162,6 +161,11 @@ async def get_order(order_id: int):
 
 async def user_orders(user_id: int, limit: int = 10):
     async with _db.execute("SELECT * FROM orders WHERE user_id=? ORDER BY id DESC LIMIT ?", (user_id, limit)) as cur:
+        return await cur.fetchall()
+
+
+async def recent_orders(limit: int = 30):
+    async with _db.execute("SELECT * FROM orders ORDER BY id DESC LIMIT ?", (int(limit),)) as cur:
         return await cur.fetchall()
 
 
