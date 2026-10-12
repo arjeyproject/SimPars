@@ -56,21 +56,19 @@ async def sync_order(bot: Bot, order, notify: bool = True) -> dict:
         data = await client.check(order["fivesim_id"])
     except FiveSimError as exc:
         if order["status"] == "PENDING" and _is_closed_error(exc):
-            reason = texts.REASON_BANNED if "ban" in str(exc).lower() else texts.REASON_TIMEOUT
-            refunded = await refund(bot, order, "TIMEOUT", reason, notify)
-            return {"status": "TIMEOUT", "new": refunded, "code": order["code"], "text": order["sms_text"]}
+            banned = "ban" in str(exc).lower()
+            refunded = await refund(bot, order, "TIMEOUT", texts.REASON_BANNED if banned else texts.REASON_TIMEOUT, notify)
+            return {"status": "TIMEOUT", "new": refunded, "reason": "banned" if banned else "timeout", "code": order["code"], "text": order["sms_text"]}
         raise
     if not isinstance(data, dict):
         raise FiveSimError("invalid provider response")
 
     remote = str(data.get("status") or "").upper()
-    result = {"status": order["status"], "new": False, "code": order["code"], "text": order["sms_text"]}
-
-    # Closed/banned provider state wins over any stale SMS payload.
+    result = {"status": order["status"], "new": False, "reason": "", "code": order["code"], "text": order["sms_text"]}
     if order["status"] == "PENDING" and remote in CLOSED_REMOTE:
-        reason = texts.REASON_BANNED if remote in ("BANNED", "BAN") else texts.REASON_TIMEOUT
-        refunded = await refund(bot, order, "TIMEOUT", reason, notify)
-        result.update(status="TIMEOUT", new=refunded)
+        banned = remote in ("BANNED", "BAN")
+        refunded = await refund(bot, order, "TIMEOUT", texts.REASON_BANNED if banned else texts.REASON_TIMEOUT, notify)
+        result.update(status="TIMEOUT", new=refunded, reason="banned" if banned else "timeout")
         return result
 
     latest = _latest_sms(data.get("sms"))
@@ -87,15 +85,14 @@ async def sync_order(bot: Bot, order, notify: bool = True) -> dict:
                     log.warning("code notify failed: %s", exc)
 
     now = time.time()
-    if result["status"] == "PENDING":
-        if now > order["expires_at"]:
-            try:
-                await client.cancel(order["fivesim_id"])
-            except FiveSimError as exc:
-                if "sms" in str(exc).lower():
-                    return result
-            await refund(bot, order, "TIMEOUT", texts.REASON_TIMEOUT, notify)
-            result["status"] = "TIMEOUT"
+    if result["status"] == "PENDING" and now > order["expires_at"]:
+        try:
+            await client.cancel(order["fivesim_id"])
+        except FiveSimError as exc:
+            if "sms" in str(exc).lower():
+                return result
+        await refund(bot, order, "TIMEOUT", texts.REASON_TIMEOUT, notify)
+        result.update(status="TIMEOUT", reason="timeout")
     elif result["status"] == "RECEIVED" and (now > order["expires_at"] or remote == "FINISHED"):
         if remote != "FINISHED":
             try:
