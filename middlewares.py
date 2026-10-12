@@ -5,7 +5,7 @@ import logging
 from typing import Any, Awaitable, Callable, Dict
 
 from aiogram import BaseMiddleware, Bot
-from aiogram.types import CallbackQuery, Message, TelegramObject
+from aiogram.types import CallbackQuery, KeyboardButton, Message, ReplyKeyboardMarkup, TelegramObject
 
 import database as db
 import keyboards as kb
@@ -13,6 +13,11 @@ import texts
 from config import ADMIN_IDS, CHANNEL_USERNAME
 
 log = logging.getLogger(__name__)
+CONTACT_REQUIRED = "🔐 برای فعال‌سازی حساب و ادامه استفاده، لطفاً شماره تماس خودت را با دکمه زیر ارسال کن. این شماره فقط برای شناسایی حساب و پشتیبانی سفارش‌ها ذخیره می‌شود."
+
+
+def contact_request_kb() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="📱 ارسال شماره تماس", request_contact=True)]], resize_keyboard=True, one_time_keyboard=True, input_field_placeholder="ارسال شماره تماس")
 
 
 async def is_member(bot: Bot, user_id: int) -> bool:
@@ -70,11 +75,10 @@ class AccessMiddleware(BaseMiddleware):
         if await db.get_setting("maintenance") == "1":
             return await self._deny(event, texts.MAINTENANCE, alert="🛠 ربات در حال بروزرسانی است.")
 
-        # A contact message is the one event allowed before registration.
         if isinstance(event, Message) and event.contact is not None:
             return await handler(event, data)
         if not row or not row["contact_phone"]:
-            return await self._deny(event, texts.CONTACT_REQUIRED, markup=kb.contact_request_kb())
+            return await self._deny(event, CONTACT_REQUIRED, markup=contact_request_kb())
 
         if await db.get_setting("force_join") == "1" and not await is_member(bot, user.id):
             if isinstance(event, CallbackQuery) and event.data == "joined":
