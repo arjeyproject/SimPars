@@ -29,8 +29,8 @@ def create_app(bot: Bot) -> web.Application:
         else:
             try:
                 ok, message = await process_payment(bot, authority, notify_user=True)
-            except Exception as exc:  # noqa: BLE001
-                log.exception("payment callback failed for authority %s", authority)
+            except Exception:  # noqa: BLE001
+                log.exception("payment callback failed")
                 ok, message = False, "خطای موقت در بررسی پرداخت. لطفاً چند دقیقه بعد دوباره تلاش کن یا با پشتیبانی تماس بگیر."
         page = PAGE.format(
             icon="✅" if ok else "❌",
@@ -45,5 +45,6 @@ def create_app(bot: Bot) -> web.Application:
 
     app = web.Application()
     app.router.add_get("/", health)
+    app.router.add_get("/health", health)
     app.router.add_get("/zarinpal/callback", zarinpal_callback)
     return app
