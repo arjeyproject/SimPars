@@ -1,4 +1,4 @@
-"""SimPars - منطق پیگیری سفارش‌ها و بازگشت وجه"""
+"""منطق پیگیری سفارش‌ها و بازگشت وجه."""
 from __future__ import annotations
 
 import logging
@@ -24,7 +24,7 @@ def code_message(order, code: str, text: str) -> str:
 
 
 async def refund(bot: Bot, order, to_status: str, reason: str, notify: bool = True) -> bool:
-    """بازگشت وجه فقط یک‌بار انجام می‌شود (تغییر وضعیت اتمیک)."""
+    """بازگشت وجه فقط یک‌بار و با تغییر وضعیت اتمیک انجام می‌شود."""
     if not await db.transition_order(order["id"], ("PENDING",), to_status):
         return False
     await db.add_balance(order["user_id"], order["price"])
@@ -32,8 +32,10 @@ async def refund(bot: Bot, order, to_status: str, reason: str, notify: bool = Tr
         try:
             await bot.send_message(
                 order["user_id"],
-                texts.REFUNDED.format(order_id=order["id"], phone=esc(order["phone"]),
-                                      price=order["price"], reason=reason),
+                texts.REFUNDED.format(
+                    order_id=order["id"], phone=esc(order["phone"]),
+                    price=order["price"], reason=reason,
+                ),
                 reply_markup=kb.back_main(),
             )
         except Exception as exc:  # noqa: BLE001
@@ -41,29 +43,46 @@ async def refund(bot: Bot, order, to_status: str, reason: str, notify: bool = Tr
     return True
 
 
-async def sync_order(bot: Bot, order, notify: bool = True) -> dict:
-    """وضعیت سفارش را از 5Sim می‌گیرد و دیتابیس را بروز می‌کند.
+def _latest_sms(payload) -> tuple[str, str] | None:
+    if not isinstance(payload, list):
+        return None
+    for item in reversed(payload):
+        if not isinstance(item, dict):
+            continue
+        code = str(item.get("code") or "").strip()
+        text = str(item.get("text") or "").strip()
+        if code or text:
+            return code, text
+    return None
 
-    خروجی: {"status": ..., "new": bool, "code": str|None, "text": str|None}
-    """
+
+async def sync_order(bot: Bot, order, notify: bool = True) -> dict:
+    """وضعیت سفارش را امن و idempotent از 5Sim می‌گیرد و ذخیره می‌کند."""
     client = FiveSimClient(await db.get_setting("fivesim_api"))
     data = await client.check(order["fivesim_id"])
-    remote = str(data.get("status") or "").upper()
-    sms_list = data.get("sms") or []
-    result = {"status": order["status"], "new": False, "code": order["code"], "text": order["sms_text"]}
+    if not isinstance(data, dict):
+        raise FiveSimError("invalid provider response")
 
-    if sms_list:
-        last = sms_list[-1] if isinstance(sms_list[-1], dict) else {}
-        code = str(last.get("code") or "").strip()
-        text = str(last.get("text") or "").strip()
+    remote = str(data.get("status") or "").upper()
+    result = {
+        "status": order["status"],
+        "new": False,
+        "code": order["code"],
+        "text": order["sms_text"],
+    }
+    latest = _latest_sms(data.get("sms"))
+    if latest:
+        code, text = latest
         result.update(status="RECEIVED", code=code, text=text)
         changed = text != (order["sms_text"] or "") or code != (order["code"] or "")
         if changed and await db.set_order_sms(order["id"], order["sms_text"] or "", code, text):
             result["new"] = True
             if notify:
                 try:
-                    await bot.send_message(order["user_id"], code_message(order, code, text),
-                                           reply_markup=kb.order_received_kb(order["id"]))
+                    await bot.send_message(
+                        order["user_id"], code_message(order, code, text),
+                        reply_markup=kb.order_received_kb(order["id"]),
+                    )
                 except Exception as exc:  # noqa: BLE001
                     log.warning("code notify failed: %s", exc)
 
@@ -77,7 +96,7 @@ async def sync_order(bot: Bot, order, notify: bool = True) -> dict:
                 await client.cancel(order["fivesim_id"])
             except FiveSimError as exc:
                 if "sms" in str(exc).lower():
-                    return result  # پیامک رسیده؛ در دور بعد ثبت می‌شود
+                    return result
             await refund(bot, order, "TIMEOUT", texts.REASON_TIMEOUT, notify)
             result["status"] = "TIMEOUT"
     elif result["status"] == "RECEIVED":
@@ -86,7 +105,7 @@ async def sync_order(bot: Bot, order, notify: bool = True) -> dict:
                 try:
                     await client.finish(order["fivesim_id"])
                 except FiveSimError:
-                    pass
+                    log.warning("could not finish remote order %s", order["fivesim_id"])
             await db.transition_order(order["id"], ("PENDING", "RECEIVED"), "FINISHED")
             result["status"] = "FINISHED"
     return result
