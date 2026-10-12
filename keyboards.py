@@ -5,11 +5,11 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 import texts
 from config import CHANNEL_USERNAME, INSTAGRAM_ID, OWNER_USERNAME
 
-def btn(text: str, cb: str | None = None, url: str | None = None) -> InlineKeyboardButton: return InlineKeyboardButton(text=text, url=url) if url else InlineKeyboardButton(text=text, callback_data=cb or "noop")
-def markup(rows: list[list[InlineKeyboardButton]]) -> InlineKeyboardMarkup: return InlineKeyboardMarkup(inline_keyboard=rows)
-def onoff(value: str) -> str: return "✅ روشن" if value == "1" else "❌ خاموش"
+def btn(text, cb=None, url=None): return InlineKeyboardButton(text=text, url=url) if url else InlineKeyboardButton(text=text, callback_data=cb or "noop")
+def markup(rows): return InlineKeyboardMarkup(inline_keyboard=rows)
+def onoff(value): return "✅ روشن" if value == "1" else "❌ خاموش"
 CHANNEL_URL="https://t.me/"+CHANNEL_USERNAME.lstrip("@"); OWNER_URL=f"https://t.me/{OWNER_USERNAME}"; INSTAGRAM_URL=f"https://instagram.com/{INSTAGRAM_ID}"
-def _platform_name(product: str) -> str:
+def _platform_name(product):
     known=texts.SERVICE_MAP.get(product); title=known[1] if known else product.replace("_"," ").replace("-"," "); emoji=known[0] if known else "🔹"
     return f"{emoji} " + " ".join(word[:1].upper()+word[1:].lower() for word in title.split())
 def main_menu(is_admin=False):
@@ -50,18 +50,21 @@ def operators_kb(product,country,items,page,pages):
     if page<pages-1: nav.append(btn("بعدی",f"ops:{product}:{country}:{page+1}"))
     rows += [nav,[btn("بازگشت به کشورها",f"srv:{product}:0")],[btn("🏠 منوی اصلی","home")]]; return markup(rows)
 def confirm_kb(product,country,operator,enough):
-    rows=[[btn("✅ تأیید و خرید",f"ok:{product}:{country}:{operator}")]] if enough else [[btn("💳 شارژ کیف پول","wallet")]]
+    if enough:
+        rows=[[btn("✅ تأیید و خرید",f"ok:{product}:{country}:{operator}")]]
+    else:
+        rows=[[btn("💳 شارژ کیف پول","wallet")]]
     rows += [[btn("انتخاب کشور",f"srv:{product}:0")],[btn("🏠 منوی اصلی","home")]]; return markup(rows)
 def order_kb(order_id): return markup([[btn("🔄 بررسی دریافت کد",f"chk:{order_id}")],[btn("❌ لغو و بازگشت وجه",f"cnl:{order_id}")]])
 def order_received_kb(order_id): return markup([[btn("🔄 بررسی پیامک جدید",f"chk:{order_id}")],[btn("✅ اتمام سفارش",f"fin:{order_id}")],[btn("🏠 منوی اصلی","home")]])
 def wallet_kb():
-    amounts=[50_000,100_000,200_000,500_000]; return markup([[btn(f"💵 {amounts[0]:,} تومان",f"dep:{amounts[0]}"),btn(f"💵 {amounts[1]:,} تومان",f"dep:{amounts[1]}")],[btn(f"💵 {amounts[2]:,} تومان",f"dep:{amounts[2]}"),btn(f"💵 {amounts[3]:,} تومان",f"dep:{amounts[3]}")],[btn("✍️ مبلغ دلخواه","dep_custom")],[btn("🏠 منوی اصلی","home")]])
+    amounts=[50000,100000,200000,500000]; return markup([[btn(f"💵 {amounts[0]:,} تومان",f"dep:{amounts[0]}"),btn(f"💵 {amounts[1]:,} تومان",f"dep:{amounts[1]}")],[btn(f"💵 {amounts[2]:,} تومان",f"dep:{amounts[2]}"),btn(f"💵 {amounts[3]:,} تومان",f"dep:{amounts[3]}")],[btn("✍️ مبلغ دلخواه","dep_custom")],[btn("🏠 منوی اصلی","home")]])
 def payment_kb(url,track_id): return markup([[btn("💳 پرداخت آنلاین",url=url)],[btn("✅ پرداخت کردم، بررسی شود",f"vfy:{track_id}")],[btn("🏠 منوی اصلی","home")]])
 def cancel_kb(cb="home"): return markup([[btn("انصراف",cb)]])
 def support_kb(): return markup([[btn("ارتباط با پشتیبانی",url=OWNER_URL)],[btn("کانال",url=CHANNEL_URL),btn("اینستاگرام",url=INSTAGRAM_URL)],[btn("🏠 منوی اصلی","home")]])
 def referral_kb(link): return markup([[btn("اشتراک‌گذاری لینک",url=f"https://t.me/share/url?url={quote(link)}&text={quote('با سیم‌پارس شماره مجازی بگیر!')}")],[btn("🏠 منوی اصلی","home")]])
 def admin_menu(force_join,maintenance): return markup([[btn("📊 آمار و گزارشات","adm_stats")],[btn("🔑 تنظیمات 5Sim","panel_5sim"),btn("💳 درگاه زرین‌پال","panel_zibal")],[btn("💹 قیمت‌گذاری و مالی","panel_price"),btn("👥 مدیریت کاربران","adm_user")],[btn("📢 پیام همگانی","adm_bc"),btn("📝 متن پشتیبانی","aset:support_text")],[btn(f"🔒 جوین اجباری: {onoff(force_join)}","atog:force_join")],[btn(f"🛠 حالت تعمیرات: {onoff(maintenance)}","atog:maintenance")],[btn("🏠 منوی اصلی ربات","home")]])
-def admin_back(cb="admin"): return markup([[btn("🔙 بازگشت به پنل",cb)])
+def admin_back(cb="admin"): return markup([[btn("🔙 بازگشت به پنل",cb)]])
 def fivesim_admin_kb(has_key):
     rows=[[btn("✏️ ثبت / تغییر API Key","aset:fivesim_api")]]
     if has_key: rows.append([btn("🔄 بروزرسانی موجودی","panel_5sim"),btn("🗑 حذف API","adel:fivesim_api")])
