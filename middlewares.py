@@ -1,12 +1,9 @@
 """میدلور دسترسی: ثبت کاربر، مسدودی، تعمیرات، جوین اجباری و شماره تماس."""
 from __future__ import annotations
-
 import logging
 from typing import Any, Awaitable, Callable, Dict
-
 from aiogram import BaseMiddleware, Bot
 from aiogram.types import CallbackQuery, KeyboardButton, Message, ReplyKeyboardMarkup, TelegramObject
-
 import database as db
 import keyboards as kb
 import texts
@@ -28,7 +25,6 @@ async def configured_channel() -> str:
 
 
 async def is_member(bot: Bot, user_id: int, channel: str) -> bool | None:
-    """Return None on an API error so the join lock never fails open."""
     try:
         member = await bot.get_chat_member(channel, user_id)
     except Exception as exc:  # noqa: BLE001
@@ -40,6 +36,15 @@ async def is_member(bot: Bot, user_id: int, channel: str) -> bool | None:
     if status == "restricted":
         return bool(getattr(member, "is_member", False))
     return True
+
+
+def join_markup(channel: str):
+    url = f"https://t.me/{channel.lstrip('@')}" if channel.startswith("@") else None
+    rows = []
+    if url:
+        rows.append([kb.btn("📢 عضویت در کانال", url=url, style="primary")])
+    rows.append([kb.btn("✅ عضو شدم", "joined", style="success")])
+    return kb.markup(rows)
 
 
 async def _handle_referral(bot: Bot, message: Message) -> None:
@@ -90,11 +95,10 @@ class AccessMiddleware(BaseMiddleware):
                     alert = "❌ هنوز عضویتت تأیید نشده؛ اول عضو کانال شو و دوباره امتحان کن." if membership is False else JOIN_CHECK_ERROR
                     await event.answer(alert, show_alert=True)
                     return None
-                message = texts.FORCE_JOIN.replace(texts.FORCE_JOIN.split("📢 کانال رسمی: ", 1)[-1].split("\n", 1)[0], channel) if "📢 کانال رسمی: " in texts.FORCE_JOIN else texts.FORCE_JOIN
-                message += "\n\n" + JOIN_SUPPORT_TEXT
+                message = texts.FORCE_JOIN + "\n\n" + JOIN_SUPPORT_TEXT
                 if membership is None:
                     message += "\n\n" + JOIN_CHECK_ERROR
-                return await self._deny(event, message, markup=kb.join_kb())
+                return await self._deny(event, message, markup=join_markup(channel))
         return await handler(event, data)
 
     @staticmethod
