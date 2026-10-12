@@ -19,20 +19,20 @@ JOIN_CHECK_ERROR = "⚠️ بررسی عضویت موقتاً ممکن نیست.
 
 
 def contact_request_kb() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="📱 ارسال شماره تماس", request_contact=True)]],
-        resize_keyboard=True,
-        one_time_keyboard=True,
-        input_field_placeholder="ارسال شماره تماس",
-    )
+    return ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="📱 ارسال شماره تماس", request_contact=True)]], resize_keyboard=True, one_time_keyboard=True, input_field_placeholder="ارسال شماره تماس")
 
 
-async def is_member(bot: Bot, user_id: int) -> bool | None:
+async def configured_channel() -> str:
+    value = (await db.get_setting("force_join_channel")).strip()
+    return value or CHANNEL_USERNAME
+
+
+async def is_member(bot: Bot, user_id: int, channel: str) -> bool | None:
     """Return None on an API error so the join lock never fails open."""
     try:
-        member = await bot.get_chat_member(CHANNEL_USERNAME, user_id)
+        member = await bot.get_chat_member(channel, user_id)
     except Exception as exc:  # noqa: BLE001
-        log.warning("force-join check failed: %s", exc)
+        log.warning("force-join check failed for %s: %s", channel, exc)
         return None
     status = str(getattr(member.status, "value", member.status))
     if status in ("left", "kicked"):
@@ -64,39 +64,34 @@ class AccessMiddleware(BaseMiddleware):
         user = data.get("event_from_user")
         if user is None or user.is_bot:
             return await handler(event, data)
-
         chat = event.chat if isinstance(event, Message) else (event.message.chat if isinstance(event, CallbackQuery) and event.message else None)
         if chat is not None and chat.type != "private":
             return None
-
         bot: Bot = data["bot"]
         created = await db.ensure_user(user.id, user.username, user.full_name)
         if created and isinstance(event, Message):
             await _handle_referral(bot, event)
-
         if user.id in ADMIN_IDS:
             return await handler(event, data)
-
         row = await db.get_user(user.id)
         if row and row["is_banned"]:
             return await self._deny(event, texts.BANNED, alert="🚫 دسترسی شما مسدود است.")
         if await db.get_setting("maintenance") == "1":
             return await self._deny(event, texts.MAINTENANCE, alert="🛠 ربات در حال بروزرسانی است.")
-
-        # Let the contact message through so the user can complete registration.
         if isinstance(event, Message) and event.contact is not None:
             return await handler(event, data)
         if not row or not row["contact_phone"]:
             return await self._deny(event, CONTACT_REQUIRED, markup=contact_request_kb())
-
         if await db.get_setting("force_join") == "1":
-            membership = await is_member(bot, user.id)
+            channel = await configured_channel()
+            membership = await is_member(bot, user.id, channel)
             if membership is not True:
                 if isinstance(event, CallbackQuery) and event.data == "joined":
                     alert = "❌ هنوز عضویتت تأیید نشده؛ اول عضو کانال شو و دوباره امتحان کن." if membership is False else JOIN_CHECK_ERROR
                     await event.answer(alert, show_alert=True)
                     return None
-                message = texts.FORCE_JOIN + "\n\n" + JOIN_SUPPORT_TEXT
+                message = texts.FORCE_JOIN.replace(texts.FORCE_JOIN.split("📢 کانال رسمی: ", 1)[-1].split("\n", 1)[0], channel) if "📢 کانال رسمی: " in texts.FORCE_JOIN else texts.FORCE_JOIN
+                message += "\n\n" + JOIN_SUPPORT_TEXT
                 if membership is None:
                     message += "\n\n" + JOIN_CHECK_ERROR
                 return await self._deny(event, message, markup=kb.join_kb())
