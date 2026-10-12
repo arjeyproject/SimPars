@@ -41,9 +41,10 @@ def countries_kb(product, items, page, pages):
     if page<pages-1: nav.append(btn("بعدی", f"srv:{product}:{page+1}"))
     rows += [nav, [btn("بروزرسانی قیمت‌ها", f"srv:{product}:{page}")], [btn("انتخاب سرویس", "buy"), btn("🏠 منوی اصلی", "home")]]; return markup(rows)
 def operators_kb(product, country, items, page, pages):
-    start=page*12; visible=items[start:start+12]; rows=[]; row=[]
-    for local_index, _ in enumerate(visible):
-        absolute=start+local_index; row.append(btn(str(local_index+1), f"op:{product}:{country}:{absolute}"))
+    start=page*12; visible=items[start:start+12]; minimum=min((price for _, price, _ in items), default=0); rows=[]; row=[]
+    for local_index, (_, price, _) in enumerate(visible):
+        absolute=start+local_index; tier="اقتصادی" if price == minimum else "اختصاصی"
+        row.append(btn(f"{local_index+1} | {tier}", f"op:{product}:{country}:{absolute}"))
         if len(row)==4: rows.append(row); row=[]
     if row: rows.append(row)
     nav=[]
@@ -52,12 +53,9 @@ def operators_kb(product, country, items, page, pages):
     if page<pages-1: nav.append(btn("بعدی", f"ops:{product}:{country}:{page+1}"))
     rows += [nav, [btn("بازگشت به کشورها", f"srv:{product}:0")], [btn("🏠 منوی اصلی", "home")]]; return markup(rows)
 def confirm_kb(product, country, operator, enough):
-    if enough:
-        rows = [[btn("تأیید و خرید", f"ok:{product}:{country}:{operator}")]]
-    else:
-        rows = [[btn("شارژ کیف پول", "wallet")]]
-    rows += [[btn("انتخاب اپراتور", f"cn:{product}:{country}")], [btn("🏠 منوی اصلی", "home")]]
-    return markup(rows)
+    if enough: rows = [[btn("تأیید و خرید", f"ok:{product}:{country}:{operator}")]]
+    else: rows = [[btn("شارژ کیف پول", "wallet")]]
+    rows += [[btn("انتخاب اپراتور", f"cn:{product}:{country}")], [btn("🏠 منوی اصلی", "home")]]; return markup(rows)
 def order_kb(order_id): return markup([[btn("بررسی دریافت کد", f"chk:{order_id}")], [btn("لغو و بازگشت وجه", f"cnl:{order_id}")]])
 def order_received_kb(order_id): return markup([[btn("بررسی پیامک جدید", f"chk:{order_id}")], [btn("اتمام سفارش", f"fin:{order_id}")], [btn("🏠 منوی اصلی", "home")]])
 def wallet_kb():
