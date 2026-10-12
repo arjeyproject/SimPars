@@ -31,7 +31,6 @@ async def _pricing() -> tuple[float, float]:
 
 
 async def _loading(call: CallbackQuery, frames: list[str], pause: float = 0.16) -> None:
-    """انیمیشن سبک با edit پیام، بدون پیام‌های اضافه و اسپم."""
     for frame in frames:
         try:
             await call.message.edit_text(frame)
@@ -193,7 +192,8 @@ async def cb_check(call: CallbackQuery) -> None:
         await safe_edit(call, code_message(order, result.get("code") or "", result.get("text") or ""), markup)
     elif status == "TIMEOUT":
         await call.answer("↩️ سفارش بسته شد و مبلغ برگشت خورد.", show_alert=True)
-        await safe_edit(call, texts.REFUNDED.format(order_id=order["id"], phone=esc(order["phone"]), price=order["price"], reason=texts.REASON_BANNED if result.get("new") else texts.REASON_TIMEOUT), kb.back_main())
+        reason = texts.REASON_BANNED if result.get("reason") == "banned" else texts.REASON_TIMEOUT
+        await safe_edit(call, texts.REFUNDED.format(order_id=order["id"], phone=esc(order["phone"]), price=order["price"], reason=reason), kb.back_main())
     else:
         await call.answer(texts.WAITING_CODE, show_alert=True)
 
