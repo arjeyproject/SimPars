@@ -30,6 +30,16 @@ async def _pricing() -> tuple[float, float]:
     return await db.get_float("rate", 1000), max(0.0, await db.get_float("profit_percent", 30))
 
 
+async def _loading(call: CallbackQuery, frames: list[str], pause: float = 0.16) -> None:
+    """انیمیشن سبک با edit پیام، بدون پیام‌های اضافه و اسپم."""
+    for frame in frames:
+        try:
+            await call.message.edit_text(frame)
+            await asyncio.sleep(pause)
+        except Exception:
+            return
+
+
 @router.callback_query(F.data == "buy")
 async def cb_buy(call: CallbackQuery) -> None:
     if not await db.get_setting("fivesim_api") or not await sales_allowed():
@@ -50,7 +60,8 @@ async def cb_service(call: CallbackQuery) -> None:
     if not await sales_allowed():
         await call.answer(texts.SALES_DISABLED, show_alert=True)
         return
-    await call.answer("⏳ در حال دریافت قیمت‌ها...")
+    await call.answer("⏳ در حال دریافت اطلاعات...")
+    await _loading(call, ["🌍 <b>اتصال به سرور کشورها</b> ▓░░░", "📡 <b>دریافت موجودی زنده</b> ▓▓░░", "💰 <b>محاسبه قیمت‌ها</b> ▓▓▓░", "✨ <b>مرتب‌سازی فهرست</b> ▓▓▓▓"], 0.12)
     try:
         prices = await fivesim.get_product_prices(product)
     except FiveSimError as exc:
@@ -87,7 +98,7 @@ async def cb_country(call: CallbackQuery) -> None:
         return
     info = prices.get(country)
     if not info:
-        await call.answer("😕 موجودی این کشور تموم شد، کشور دیگه‌ای انتخاب کن.", show_alert=True)
+        await call.answer("😕 موجودی این کشور تمام شده، کشور دیگری انتخاب کن.", show_alert=True)
         return
     _, cost, count = info
     rate, profit = await _pricing()
@@ -112,14 +123,15 @@ async def cb_purchase(call: CallbackQuery) -> None:
     user_id = call.from_user.id
     lock = _locks[user_id]
     if lock.locked():
-        await call.answer("⏳ درخواست قبلیت در حال پردازشه...", show_alert=True)
+        await call.answer("⏳ درخواست قبلی در حال پردازش است...", show_alert=True)
         return
     async with lock:
         token = await db.get_setting("fivesim_api")
         if not token or not await sales_allowed():
             await call.answer(texts.SALES_DISABLED, show_alert=True)
             return
-        await call.answer("⏳ در حال دریافت شماره...")
+        await call.answer("⏳ در حال رزرو شماره...")
+        await _loading(call, ["🛒 <b>آماده‌سازی سفارش</b> ▓░░░", "🔐 <b>بررسی کیف پول</b> ▓▓░░", "📡 <b>رزرو شماره از تامین‌کننده</b> ▓▓▓░"], 0.14)
         try:
             prices = await fivesim.get_product_prices(product, use_cache=False)
         except FiveSimError as exc:
@@ -176,12 +188,12 @@ async def cb_check(call: CallbackQuery) -> None:
         return
     status = result["status"]
     if status in ("RECEIVED", "FINISHED") and (result.get("code") or result.get("text")):
-        await call.answer("📩 کد دریافت شد!")
+        await call.answer("📩 کد تأیید دریافت شد!")
         markup = kb.order_received_kb(order["id"]) if status == "RECEIVED" else kb.back_main()
         await safe_edit(call, code_message(order, result.get("code") or "", result.get("text") or ""), markup)
     elif status == "TIMEOUT":
-        await call.answer("⌛️ مهلت تموم شد و مبلغ برگشت خورد.", show_alert=True)
-        await safe_edit(call, texts.REFUNDED.format(order_id=order["id"], phone=esc(order["phone"]), price=order["price"], reason=texts.REASON_TIMEOUT), kb.back_main())
+        await call.answer("↩️ سفارش بسته شد و مبلغ برگشت خورد.", show_alert=True)
+        await safe_edit(call, texts.REFUNDED.format(order_id=order["id"], phone=esc(order["phone"]), price=order["price"], reason=texts.REASON_BANNED if result.get("new") else texts.REASON_TIMEOUT), kb.back_main())
     else:
         await call.answer(texts.WAITING_CODE, show_alert=True)
 
