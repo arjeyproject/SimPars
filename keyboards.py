@@ -34,7 +34,7 @@ def main_menu(is_admin=False):
 def back_main(): return markup([[btn("🏠 بازگشت به منوی اصلی","home",style="danger")]])
 def back_to(cb,text="🔙 بازگشت"): return markup([[btn(text,cb,style="danger")],[btn("🏠 منوی اصلی","home",style="danger")]])
 def join_kb(): return markup([[btn("📢 عضویت در کانال سیم‌پارس",url=CHANNEL_URL)],[btn("✅ عضو شدم","joined",style="success")]])
-def services_kb(): return product_kb([code for code,_,_ in texts.SERVICES])
+def services_kb(): return product_kb([code for code,_,_ in texts.SERVICES)
 def storefront_kb(products): return markup([[btn("💎 خرید اقتصادی","cat:economic:0",style="primary")],[btn("🏠 منوی اصلی","home",style="danger")]])
 def product_kb(products,category="economic",page=0,pages=1):
     rows=[]; row=[]
@@ -73,7 +73,7 @@ def wallet_kb():
     amounts=[50000,100000,200000,500000]; return markup([[btn(f"💵 {amounts[0]:,} تومان",f"dep:{amounts[0]}",style="success"),btn(f"💵 {amounts[1]:,} تومان",f"dep:{amounts[1]}",style="success")],[btn(f"💵 {amounts[2]:,} تومان",f"dep:{amounts[2]}",style="success"),btn(f"💵 {amounts[3]:,} تومان",f"dep:{amounts[3]}",style="success")],[btn("✍️ مبلغ دلخواه","dep_custom",style="primary")],[btn("🏠 منوی اصلی","home",style="danger")]])
 def payment_kb(url,track_id): return markup([[btn("💳 پرداخت آنلاین",url=url,style="success")],[btn("✅ پرداخت کردم، بررسی شود",f"vfy:{track_id}",style="success")],[btn("🏠 منوی اصلی","home",style="danger")]])
 def cancel_kb(cb="home"): return markup([[btn("انصراف",cb,style="danger")]])
-def support_kb(): return markup([[btn("ارتباط با پشتیبانی",url=OWNER_URL,style="primary")],[btn("کانال",url=CHANNEL_URL,style="danger"),btn("اینستاگرام",url=INSTAGRAM_URL,style="danger")],[btn("🏠 منوی اصلی","home",style="danger")]])
+def support_kb(): return markup([[btn("ارتباط با پشتیبانی",url=OWNER_URL,style="primary")],[btn("کانال",url=CHANNEL_URL,style="success"),btn("اینستاگرام",url=INSTAGRAM_URL,style="success")],[btn("🏠 منوی اصلی","home",style="danger")]])
 def referral_kb(link): return markup([[btn("اشتراک‌گذاری لینک",url=f"https://t.me/share/url?url={quote(link)}&text={quote('با سیم‌پارس شماره مجازی بگیر!')}",style="success")],[btn("🏠 منوی اصلی","home",style="danger")]])
 def admin_menu(force_join,maintenance): return markup([[btn("📊 آمار و گزارشات","adm_stats",style="primary")],[btn("🔑 تنظیمات 5Sim","panel_5sim",style="primary"),btn("💳 درگاه زرین‌پال","panel_zibal",style="primary")],[btn("💹 قیمت‌گذاری و مالی","panel_price",style="primary"),btn("👥 مدیریت کاربران","adm_user",style="primary")],[btn("📢 پیام همگانی","adm_bc",style="primary"),btn("📝 متن پشتیبانی","aset:support_text",style="primary")],[btn(f"🔒 جوین اجباری: {onoff(force_join)}","atog:force_join",style="primary")],[btn(f"🛠 حالت تعمیرات: {onoff(maintenance)}","atog:maintenance",style="danger")],[btn("🏠 منوی اصلی ربات","home",style="danger")]])
 def admin_back(cb="admin"): return markup([[btn("🔙 بازگشت به پنل",cb,style="danger")]])
