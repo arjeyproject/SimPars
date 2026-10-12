@@ -1,4 +1,4 @@
-"""SimPars - بخش‌های عمومی کاربر"""
+"""بخش‌های عمومی کاربر."""
 from __future__ import annotations
 
 import time
@@ -74,17 +74,26 @@ async def cb_orders(call: CallbackQuery) -> None:
         ]))
         await call.answer()
         return
-    lines = ["📦 <b>۱۰ سفارش آخر شما</b>\n"]
+
+    lines = ["📦 <b>۱۰ سفارش اخیر شما</b>", "━━━━━━━━━━━━━━"]
     rows = []
     for order in orders:
-        lines.append(
-            f"🆔 <code>#{order['id']}</code> | {service_title(order['product'])} | {country_title(order['country'])}\n"
-            f"📞 <code>{esc(order['phone'])}</code> | 💰 {order['price']:,} ت\n"
-            f"🔑 کد: <code>{esc(order['code'] or '—')}</code> | {texts.ORDER_STATUS.get(order['status'], order['status'])}\n"
-        )
+        created = time.strftime("%m/%d %H:%M", time.localtime(order["created_at"]))
+        status = texts.ORDER_STATUS.get(order["status"], "⚠️ وضعیت نامشخص")
+        lines.extend([
+            f"🆔 <code>#{order['id']}</code> | {service_title(order['product'])} | {country_title(order['country'])}",
+            f"📅 {created} | 💰 <b>{order['price']:,} تومان</b>",
+            f"📞 <code>{esc(order['phone'])}</code> | {status}",
+            f"🔑 کد: <code>{esc(order['code'] or '—')}</code>",
+            "━━━━━━━━━━━━━━",
+        ])
         if order["status"] in ("PENDING", "RECEIVED"):
             rows.append([kb.btn(f"🔄 پیگیری سفارش #{order['id']}", f"chk:{order['id']}")])
-    rows.append([kb.btn("🏠 منوی اصلی", "home")])
+
+    rows.extend([
+        [kb.btn("🛒 خرید شماره جدید", "buy")],
+        [kb.btn("🏠 منوی اصلی", "home")],
+    ])
     await safe_edit(call, "\n".join(lines), kb.markup(rows))
     await call.answer()
 
