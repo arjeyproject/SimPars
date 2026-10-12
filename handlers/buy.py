@@ -1,4 +1,4 @@
-"""Virtual-number storefront handlers with clean paginated selection."""
+"""Virtual-number storefront with simple category-driven purchasing."""
 from __future__ import annotations
 import asyncio, logging, math
 from collections import defaultdict
@@ -13,64 +13,51 @@ from services.fivesim import FiveSimClient, FiveSimError, humanize
 from services.market import sales_allowed
 from services.orders import code_message, refund, sync_order
 from utils import calc_price, country_title, esc, safe_edit, service_title
-router = Router(); log = logging.getLogger(__name__); PAGE_SIZE = 10; OP_PAGE_SIZE = 12; _locks = defaultdict(asyncio.Lock)
+router = Router(); log = logging.getLogger(__name__); PAGE_SIZE = 10; _locks = defaultdict(asyncio.Lock)
 
 async def _pricing(): return await db.get_float("rate", 1000), max(0.0, await db.get_float("profit_percent", 30))
-
-def _tier(price: int, values: list[tuple[str, float, int]], rate: float, profit: float) -> str:
-    minimum = min((calc_price(cost, rate, profit) for _, cost, _ in values), default=price)
-    return "اقتصادی" if price == minimum else "اختصاصی"
-
 async def _loading(call, frames, pause=.12):
     for frame in frames:
         try: await call.message.edit_text(frame); await asyncio.sleep(pause)
         except Exception: return
 
-async def _show_operators(call: CallbackQuery, product: str, country: str, page: int = 0):
-    try: options = await fivesim.get_product_options(product)
-    except FiveSimError as exc: await call.answer(humanize(exc), show_alert=True); return
-    values = options.get(country, [])
-    if not values: await call.answer("موجودی این کشور تمام شده است.", show_alert=True); return
-    rate, profit = await _pricing(); priced = [(op, calc_price(cost, rate, profit), count) for op, cost, count in values]
-    pages = max(1, math.ceil(len(priced) / OP_PAGE_SIZE)); page = min(max(0, page), pages - 1); countries = await fivesim.countries_safe()
-    text = f"<b>{country_title(country, countries)}</b>\n\nاپراتور را با شماره انتخاب کن.\nقیمت نهایی شامل {profit:g}% سود است.\nصفحه {page + 1} از {pages}"
-    await safe_edit(call, text, kb.operators_kb(product, country, priced, page, pages))
-
-@router.callback_query(F.data.startswith("srv:"))
-async def cb_service(call: CallbackQuery):
-    try: _, product, page_raw = call.data.split(":"); page = int(page_raw)
-    except ValueError: await call.answer(); return
-    if not await sales_allowed(): await call.answer("فروش موقتاً غیرفعال است؛ نرخ را در پنل بررسی کن.", show_alert=True); return
-    await call.answer("در حال دریافت کشورها و قیمت‌ها..."); await _loading(call, ["اتصال به کشورها ▓░░░", "دریافت موجودی ▓▓░░", "محاسبه قیمت‌ها ▓▓▓░", "آماده‌سازی ▓▓▓▓"])
+async def _show_countries(call, product: str, page: int = 0, category: str = "economic"):
     try: prices = await fivesim.get_product_prices(product)
     except FiveSimError as exc: await safe_edit(call, humanize(exc), kb.back_to("buy")); return
     if not prices: await safe_edit(call, texts.NO_NUMBERS, kb.back_to("buy")); return
-    countries = await fivesim.countries_safe(); rate, profit = await _pricing(); items = sorted(((c, calc_price(cost, rate, profit)) for c, (_, cost, _) in prices.items()), key=lambda x: x[1]); pages = max(1, math.ceil(len(items) / PAGE_SIZE)); page = min(max(0, page), pages - 1); chunk = items[page * PAGE_SIZE:(page + 1) * PAGE_SIZE]
-    buttons = [(country_title(c, countries), f"{price:,} تومان", f"cn:{product}:{c}") for c, price in chunk]
-    await safe_edit(call, texts.CHOOSE_COUNTRY.format(service=f"<b>{service_title(product)}</b>", count=len(items), page=page + 1, pages=pages), kb.countries_kb(product, buttons, page, pages))
+    countries = await fivesim.countries_safe(); rate, profit = await _pricing()
+    items = []
+    for country, (_, cost, _) in prices.items():
+        items.append((country, calc_price(cost, rate, profit)))
+    items.sort(key=lambda item: item[1]); pages = max(1, math.ceil(len(items) / PAGE_SIZE)); page = min(max(0, page), pages - 1); chunk = items[page * PAGE_SIZE:(page + 1) * PAGE_SIZE]
+    buttons = [(country_title(c, countries), f"{price:,} تومان", f"cn:{product}:{c}:{category}") for c, price in chunk]
+    title = "خرید اقتصادی" if category == "economic" else "خرید اختصاصی"
+    text = f"<b>{service_title(product)}</b>\n\n{title}\nکشور را انتخاب کن.\nصفحه {page + 1} از {pages}"
+    await safe_edit(call, text, kb.countries_kb(product, buttons, page, pages))
+
+@router.callback_query(F.data.startswith("srv:"))
+async def cb_service(call: CallbackQuery):
+    try:
+        parts = call.data.split(":"); product = parts[1]; page = int(parts[2]); category = parts[3] if len(parts) > 3 else "economic"
+    except (ValueError, IndexError): await call.answer(); return
+    if not await sales_allowed(): await call.answer("فروش موقتاً غیرفعال است؛ نرخ را در پنل بررسی کن.", show_alert=True); return
+    await call.answer("در حال دریافت کشورها و قیمت‌ها..."); await _loading(call, ["اتصال به کشورها ▓░░░", "دریافت موجودی ▓▓░░", "مرتب‌سازی قیمت‌ها ▓▓▓░", "آماده‌سازی ▓▓▓▓"])
+    await _show_countries(call, product, page, category)
 
 @router.callback_query(F.data.startswith("cn:"))
 async def cb_country(call: CallbackQuery):
-    try: _, product, country = call.data.split(":")
-    except ValueError: await call.answer(); return
-    await _show_operators(call, product, country, 0); await call.answer()
-
-@router.callback_query(F.data.startswith("ops:"))
-async def cb_operator_page(call: CallbackQuery):
-    try: _, product, country, page_raw = call.data.split(":"); page = int(page_raw)
-    except ValueError: await call.answer(); return
-    await _show_operators(call, product, country, page); await call.answer()
-
-@router.callback_query(F.data.startswith("op:"))
-async def cb_operator(call: CallbackQuery):
-    try: _, product, country, index_raw = call.data.split(":", 3); index = int(index_raw)
-    except ValueError: await call.answer(); return
+    try:
+        parts = call.data.split(":"); product, country = parts[1], parts[2]; category = parts[3] if len(parts) > 3 else "economic"
+    except (ValueError, IndexError): await call.answer(); return
     try: options = await fivesim.get_product_options(product, use_cache=False)
     except FiveSimError as exc: await call.answer(humanize(exc), show_alert=True); return
     values = options.get(country, [])
-    if index < 0 or index >= len(values): await call.answer("این اپراتور دیگر موجود نیست؛ فهرست را تازه کن.", show_alert=True); return
-    operator, cost, count = values[index]; rate, profit = await _pricing(); price = calc_price(cost, rate, profit); user = await db.get_user(call.from_user.id); balance = user["balance"] if user else 0; countries = await fivesim.countries_safe(); tier = _tier(price, values, rate, profit)
-    text = texts.CONFIRM.format(service=service_title(product), country=country_title(country, countries), count=count, price=price, balance=balance, note=texts.NOTE_OK if balance >= price else texts.NOTE_LOW) + f"\nاپراتور: <b>{esc(operator)}</b>\nنوع: <b>{tier}</b>\nسود اعمال‌شده: <b>{profit:g}%</b>"
+    if not values: await call.answer("موجودی این کشور تمام شده است.", show_alert=True); return
+    rate, profit = await _pricing()
+    # Economic picks the cheapest available option; exclusive picks the highest-priced option.
+    chosen = min(values, key=lambda item: item[1]) if category == "economic" else max(values, key=lambda item: item[1])
+    operator, cost, count = chosen; price = calc_price(cost, rate, profit); user = await db.get_user(call.from_user.id); balance = user["balance"] if user else 0; countries = await fivesim.countries_safe()
+    text = texts.CONFIRM.format(service=service_title(product), country=country_title(country, countries), count=count, price=price, balance=balance, note=texts.NOTE_OK if balance >= price else texts.NOTE_LOW)
     await safe_edit(call, text, kb.confirm_kb(product, country, operator, balance >= price)); await call.answer()
 
 @router.callback_query(F.data.startswith("ok:"))
@@ -83,14 +70,14 @@ async def cb_purchase(call: CallbackQuery):
     async with lock:
         token = await db.get_setting("fivesim_api")
         if not token: await call.answer("اتصال فروشگاه در پنل مدیریت تنظیم نشده است.", show_alert=True); return
-        await call.answer("در حال رزرو شماره..."); await _loading(call, ["آماده‌سازی سفارش ▓░░░", "بررسی کیف پول ▓▓░░", "رزرو اپراتور ▓▓▓░"])
+        await call.answer("در حال رزرو شماره..."); await _loading(call, ["آماده‌سازی سفارش ▓░░░", "بررسی کیف پول ▓▓░░", "رزرو شماره ▓▓▓░"])
         try: options = await fivesim.get_product_options(product, use_cache=False)
         except FiveSimError as exc: await safe_edit(call, humanize(exc), kb.back_to(f"srv:{product}:0")); return
         match = next((x for x in options.get(country, []) if x[0] == operator), None)
         if not match: await safe_edit(call, texts.NO_NUMBERS, kb.back_to(f"srv:{product}:0")); return
         _, cost, _ = match; rate, profit = await _pricing(); price = calc_price(cost, rate, profit)
         if not await db.deduct_balance(call.from_user.id, price):
-            user = await db.get_user(call.from_user.id); await safe_edit(call, texts.INSUFFICIENT.format(price=price, balance=user["balance"] if user else 0), kb.markup([[kb.btn("شارژ کیف پول", "wallet")], [kb.btn("🏠 منوی اصلی", "home")]])); return
+            user = await db.get_user(call.from_user.id); await safe_edit(call, texts.INSUFFICIENT.format(price=price, balance=user["balance"] if user else 0), kb.markup([[kb.btn("💳 شارژ کیف پول", "wallet")], [kb.btn("🏠 منوی اصلی", "home")]])); return
         try: data = await FiveSimClient(token).buy(country, operator, product)
         except FiveSimError as exc:
             await db.add_balance(call.from_user.id, price); log.warning("buy failed: %s", exc); await safe_edit(call, f"❌ <b>خرید انجام نشد</b>\n\n{humanize(exc)}\n\nمبلغ برگشت خورد.", kb.back_to(f"srv:{product}:0")); return
