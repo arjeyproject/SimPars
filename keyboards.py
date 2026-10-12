@@ -68,7 +68,16 @@ def services_kb() -> InlineKeyboardMarkup:
 
 
 def countries_kb(product: str, items: list[tuple[str, str]], page: int, pages: int) -> InlineKeyboardMarkup:
-    rows = [[btn(label, f"cn:{product}:{country}")] for country, label in items]
+    """Show country and price together, two cards per row for predictable mobile layout."""
+    rows: list[list[InlineKeyboardButton]] = []
+    row: list[InlineKeyboardButton] = []
+    for country, label in items:
+        row.append(btn(label, f"cn:{product}:{country}"))
+        if len(row) == 2:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
     nav: list[InlineKeyboardButton] = []
     if page > 0:
         nav.append(btn("◀️ قبلی", f"srv:{product}:{page - 1}"))
