@@ -48,7 +48,7 @@ async def market_panel(call: CallbackQuery) -> None:
 async def set_key(call: CallbackQuery, state: FSMContext) -> None:
     if not _is_admin(call.from_user.id): return
     await state.set_state(MarketStates.api_key)
-    await safe_edit(call, "🔐 <b>کلید API نوسان</b>\n\nکلید را دقیقاً از ایمیل اشتراک وب‌سرویس کپی کن و بفرست. پیام بعد از دریافت حذف می‌شود.\n\n⚠️ بعد از ثبت، یک‌بار اتصال تست می‌شود؛ اگر 429 دیدی، تا چند دقیقه دوباره تست نکن.", kb.cancel_kb("market_admin"))
+    await safe_edit(call, "🔐 <b>کلید API نوسان</b>\n\nکلید را دقیقاً از ایمیل اشتراک وب‌سرویس کپی کن و بفرست. پیام بعد از دریافت حذف می‌شود.\n\n✅ ذخیره کلید هیچ درخواست شبکه‌ای نمی‌فرستد؛ بعداً تست را فقط یک‌بار بزن.", kb.cancel_kb("market_admin"))
     await call.answer()
 
 
@@ -60,16 +60,16 @@ async def save_key(message: Message, state: FSMContext) -> None:
         await message.answer("❌ کلید خالی است."); return
     try: await message.delete()
     except Exception: pass
-    await db.set_setting("usd_rate_api_key", value); await state.clear()
-    ok, detail = await refresh_rate()
-    await message.answer("✅ کلید ذخیره شد و نرخ usd_sell دریافت شد." if ok else f"⚠️ کلید ذخیره شد، اما تست ناموفق بود: <code>{esc(detail)}</code>\n\nکلید و آدرس ذخیره هستند؛ بعداً از «تست و بروزرسانی» فقط یک‌بار امتحان کن.", reply_markup=kb.admin_back("market_admin"))
+    await db.set_setting("usd_rate_api_key", value)
+    await state.clear()
+    await message.answer("✅ کلید API ذخیره شد؛ هنوز هیچ درخواست آزمایشی ارسال نشده است. چند دقیقه بعد فقط یک‌بار «تست و بروزرسانی نرخ» را بزن.", reply_markup=kb.admin_back("market_admin"))
 
 
 @router.callback_query(F.data == "market_set_url")
 async def set_url(call: CallbackQuery, state: FSMContext) -> None:
     if not _is_admin(call.from_user.id): return
     await state.set_state(MarketStates.url)
-    await safe_edit(call, f"🌐 <b>آدرس وب‌سرویس نرخ</b>\n\nاین مقدار را بدون کوتیشن، فاصله یا پارامتر اضافه بفرست:\n<code>{DEFAULT_URL}</code>\n\nذخیره آدرس دیگر درخواست شبکه نمی‌فرستد؛ بعد از ثبت کلید، تست را فقط از دکمه مربوط انجام بده.", kb.cancel_kb("market_admin"))
+    await safe_edit(call, f"🌐 <b>آدرس وب‌سرویس نرخ</b>\n\nاین مقدار را بدون کوتیشن، فاصله یا پارامتر اضافه بفرست:\n<code>{DEFAULT_URL}</code>\n\nذخیره آدرس هیچ درخواست شبکه‌ای نمی‌فرستد.", kb.cancel_kb("market_admin"))
     await call.answer()
 
 
@@ -77,13 +77,13 @@ async def set_url(call: CallbackQuery, state: FSMContext) -> None:
 async def save_url(message: Message, state: FSMContext) -> None:
     if not _is_admin(message.from_user.id): return
     value = (message.text or "").strip()
-    if value.endswith("?" ) or "api_key=" in value or "item=" in value:
+    if value.endswith("?") or "api_key=" in value or "item=" in value:
         await message.answer("❌ فقط آدرس پایه را بفرست، بدون پارامتر:\nhttp://api.navasan.tech/latest/"); return
     if not value.startswith(("http://", "https://")):
         await message.answer("❌ آدرس باید با http:// یا https:// شروع شود."); return
     await db.set_setting("usd_rate_url", value.rstrip("?") + ("/" if "api.navasan.tech" in value and not value.endswith("/") else ""))
     await state.clear()
-    await message.answer("✅ آدرس ذخیره شد. حالا کلید API را ثبت کن یا از دکمه «تست و بروزرسانی» فقط یک‌بار استفاده کن.", reply_markup=kb.admin_back("market_admin"))
+    await message.answer("✅ آدرس ذخیره شد؛ هیچ درخواست آزمایشی ارسال نشد. بعد از چند دقیقه، فقط یک‌بار تست را اجرا کن.", reply_markup=kb.admin_back("market_admin"))
 
 
 @router.callback_query(F.data == "market_refresh")
