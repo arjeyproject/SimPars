@@ -1,6 +1,7 @@
 """نگهبان نرخ فروش دلار با وب‌سرویس رسمی نوسان."""
 from __future__ import annotations
 
+import asyncio
 import os
 import time
 from typing import Any
@@ -9,9 +10,11 @@ import aiohttp
 
 import database as db
 
-# طبق راهنمای رسمی نوسان: /latest/?api_key=...&item=usd_sell
 DEFAULT_URL = "https://api.navasan.tech/latest/"
-MAX_RATE_AGE = 1800
+MAX_RATE_AGE = 36 * 3600
+_MIN_REQUEST_GAP = 60
+_refresh_lock = asyncio.Lock()
+_last_request_at = 0.0
 
 
 def _number(value: Any) -> float | None:
@@ -28,7 +31,6 @@ def _number(value: Any) -> float | None:
 
 
 def _extract_usd_sell(payload: Any) -> float | None:
-    """Extract only usd_sell.value, never a random nested market field."""
     if not isinstance(payload, dict):
         return None
     item = payload.get("usd_sell")
@@ -38,34 +40,39 @@ def _extract_usd_sell(payload: Any) -> float | None:
             if rate and 1_000 < rate < 100_000_000:
                 return rate
     rate = _number(item)
-    if rate and 1_000 < rate < 100_000_000:
-        return rate
-    return None
+    return rate if rate and 1_000 < rate < 100_000_000 else None
 
 
 async def fetch_usd_rate() -> float:
-    api_key = (await db.get_setting("usd_rate_api_key") or os.getenv("USD_RATE_API_KEY", "")).strip()
-    url = (await db.get_setting("usd_rate_url") or os.getenv("USD_RATE_URL", DEFAULT_URL)).strip()
-    if not api_key:
-        raise RuntimeError("کلید API نوسان ثبت نشده است")
-    if "api.navasan.tech" in url and not url.endswith("/"):
-        url += "/"
-    try:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=12)) as session:
-            async with session.get(
-                url,
-                params={"api_key": api_key, "item": "usd_sell"},
-                headers={"Accept": "application/json"},
-            ) as response:
-                if response.status >= 400:
-                    raise RuntimeError(f"Navasan HTTP {response.status}")
-                payload = await response.json(content_type=None)
-    except (aiohttp.ClientError, TimeoutError, ValueError) as exc:
-        raise RuntimeError(f"خطا در اتصال به نوسان: {exc}") from exc
-    rate = _extract_usd_sell(payload)
-    if not rate:
-        raise RuntimeError("پاسخ نوسان شامل usd_sell معتبر نیست")
-    return rate
+    global _last_request_at
+    async with _refresh_lock:
+        now = time.monotonic()
+        remaining = _MIN_REQUEST_GAP - (now - _last_request_at)
+        if remaining > 0:
+            raise RuntimeError(f"درخواست بعدی نرخ تا {int(remaining) + 1} ثانیه دیگر مجاز است")
+        _last_request_at = now
+
+        api_key = (await db.get_setting("usd_rate_api_key") or os.getenv("USD_RATE_API_KEY", "")).strip()
+        url = (await db.get_setting("usd_rate_url") or os.getenv("USD_RATE_URL", DEFAULT_URL)).strip()
+        if not api_key:
+            raise RuntimeError("کلید API نوسان ثبت نشده است")
+        if "api.navasan.tech" in url and not url.endswith("/"):
+            url += "/"
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=12)) as session:
+                async with session.get(url, params={"api_key": api_key, "item": "usd_sell"}, headers={"Accept": "application/json"}) as response:
+                    if response.status == 429:
+                        retry_after = response.headers.get("Retry-After", "چند")
+                        raise RuntimeError(f"نوسان موقتاً محدود کرده است؛ {retry_after} ثانیه بعد دوباره تست کن")
+                    if response.status >= 400:
+                        raise RuntimeError(f"Navasan HTTP {response.status}")
+                    payload = await response.json(content_type=None)
+        except (aiohttp.ClientError, asyncio.TimeoutError, ValueError) as exc:
+            raise RuntimeError(f"خطا در اتصال به نوسان: {exc}") from exc
+        rate = _extract_usd_sell(payload)
+        if not rate:
+            raise RuntimeError("پاسخ نوسان شامل usd_sell معتبر نیست")
+        return rate
 
 
 async def refresh_rate() -> tuple[bool, str]:
@@ -88,7 +95,7 @@ async def sales_allowed() -> bool:
     rate = await db.get_float("rate", 0)
     paused = await db.get_setting("pricing_paused") == "1"
     source = await db.get_setting("rate_source") or "manual fallback"
-    if paused and source not in ("Navasan usd_sell",) and rate > 0:
+    if paused and source != "Navasan usd_sell" and rate > 0:
         await db.set_setting("pricing_paused", "0")
         paused = False
     return not paused and rate > 0
@@ -97,9 +104,4 @@ async def sales_allowed() -> bool:
 async def snapshot() -> dict[str, str]:
     updated = await db.get_int("rate_updated_at", 0)
     age = int(time.time() - updated) if updated else None
-    return {
-        "rate": f"{await db.get_float('rate', 1200):,.0f}",
-        "source": await db.get_setting("rate_source") or "manual fallback",
-        "age": str(age) if age is not None else "unknown",
-        "paused": await db.get_setting("pricing_paused") or "0",
-    }
+    return {"rate": f"{await db.get_float('rate', 1200):,.0f}", "source": await db.get_setting("rate_source") or "manual fallback", "age": str(age) if age is not None else "unknown", "paused": await db.get_setting("pricing_paused") or "0"}
