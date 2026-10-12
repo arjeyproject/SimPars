@@ -52,7 +52,7 @@ def operators_kb(product, country, items, page, pages):
     if page<pages-1: nav.append(btn("بعدی", f"ops:{product}:{country}:{page+1}"))
     rows += [nav, [btn("بازگشت به کشورها", f"srv:{product}:0")], [btn("🏠 منوی اصلی", "home")]]; return markup(rows)
 def confirm_kb(product, country, operator, enough):
-    rows=[[btn("تأیید و خرید", f"ok:{product}:{country}:{operator}")] if enough else [btn("شارژ کیف پول", "wallet")]]
+    rows=[[btn("تأیید و خرید", f"ok:{product}:{country}:{operator}")] if enough else [btn("شارژ کیف پول", "wallet")]
     rows += [[btn("انتخاب اپراتور", f"cn:{product}:{country}")], [btn("🏠 منوی اصلی", "home")]]; return markup(rows)
 def order_kb(order_id): return markup([[btn("بررسی دریافت کد", f"chk:{order_id}")], [btn("لغو و بازگشت وجه", f"cnl:{order_id}")]])
 def order_received_kb(order_id): return markup([[btn("بررسی پیامک جدید", f"chk:{order_id}")], [btn("اتمام سفارش", f"fin:{order_id}")], [btn("🏠 منوی اصلی", "home")]])
@@ -63,7 +63,7 @@ def cancel_kb(cb="home"): return markup([[btn("انصراف",cb)]])
 def support_kb(): return markup([[btn("ارتباط با پشتیبانی",url=OWNER_URL)],[btn("کانال",url=CHANNEL_URL),btn("اینستاگرام",url=INSTAGRAM_URL)],[btn("🏠 منوی اصلی","home")]])
 def referral_kb(link): return markup([[btn("اشتراک‌گذاری لینک",url=f"https://t.me/share/url?url={quote(link)}&text={quote('با سیم‌پارس شماره مجازی بگیر!')}")],[btn("🏠 منوی اصلی","home")]])
 def admin_menu(force_join,maintenance): return markup([[btn("📊 آمار و گزارشات","adm_stats")],[btn("🔑 تنظیمات 5Sim","panel_5sim"),btn("💳 درگاه زرین‌پال","panel_zibal")],[btn("💹 قیمت‌گذاری و مالی","panel_price"),btn("👥 مدیریت کاربران","adm_user")],[btn("📢 پیام همگانی","adm_bc"),btn("📝 متن پشتیبانی","aset:support_text")],[btn(f"🔒 جوین اجباری: {onoff(force_join)}","atog:force_join")],[btn(f"🛠 حالت تعمیرات: {onoff(maintenance)}","atog:maintenance")],[btn("🏠 منوی اصلی ربات","home")]])
-def admin_back(cb="admin"): return markup([[btn("🔙 بازگشت به پنل",cb)])
+def admin_back(cb="admin"): return markup([[btn("🔙 بازگشت به پنل", cb)]])
 def fivesim_admin_kb(has_key):
     rows=[[btn("✏️ ثبت / تغییر API Key","aset:fivesim_api")]]
     if has_key: rows.append([btn("🔄 بروزرسانی موجودی","panel_5sim"),btn("🗑 حذف API","adel:fivesim_api")])
