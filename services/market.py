@@ -1,4 +1,4 @@
-"""Live FX pricing guard with safe manual fallback."""
+"""نگهبان نرخ فروش دلار با وب‌سرویس رسمی نوسان."""
 from __future__ import annotations
 
 import os
@@ -9,6 +9,7 @@ import aiohttp
 
 import database as db
 
+# طبق راهنمای رسمی نوسان: /latest/?api_key=...&item=usd_sell
 DEFAULT_URL = "https://api.navasan.tech/latest/"
 MAX_RATE_AGE = 1800
 
@@ -26,39 +27,44 @@ def _number(value: Any) -> float | None:
     return None
 
 
-def _find_rate(payload: Any) -> float | None:
-    if isinstance(payload, dict):
-        for key in ("usd_sell", "usd", "price", "value", "sell", "sell_price"):
-            rate = _number(payload.get(key))
+def _extract_usd_sell(payload: Any) -> float | None:
+    """Extract only usd_sell.value, never a random nested market field."""
+    if not isinstance(payload, dict):
+        return None
+    item = payload.get("usd_sell")
+    if isinstance(item, dict):
+        for key in ("value", "price", "sell"):
+            rate = _number(item.get(key))
             if rate and 1_000 < rate < 100_000_000:
                 return rate
-        for value in payload.values():
-            rate = _find_rate(value)
-            if rate:
-                return rate
-    elif isinstance(payload, list):
-        for value in payload:
-            rate = _find_rate(value)
-            if rate:
-                return rate
+    rate = _number(item)
+    if rate and 1_000 < rate < 100_000_000:
+        return rate
     return None
 
 
 async def fetch_usd_rate() -> float:
     api_key = (await db.get_setting("usd_rate_api_key") or os.getenv("USD_RATE_API_KEY", "")).strip()
     url = (await db.get_setting("usd_rate_url") or os.getenv("USD_RATE_URL", DEFAULT_URL)).strip()
-    if not api_key and "navasan.tech" in url:
-        raise RuntimeError("USD rate provider key is not configured")
+    if not api_key:
+        raise RuntimeError("کلید API نوسان ثبت نشده است")
+    if "api.navasan.tech" in url and not url.endswith("/"):
+        url += "/"
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=12)) as session:
-            async with session.get(url, params={"api_key": api_key} if api_key else None, headers={"Accept": "application/json"}) as response:
+            async with session.get(
+                url,
+                params={"api_key": api_key, "item": "usd_sell"},
+                headers={"Accept": "application/json"},
+            ) as response:
                 if response.status >= 400:
-                    raise RuntimeError(f"provider http {response.status}")
-                rate = _find_rate(await response.json(content_type=None))
+                    raise RuntimeError(f"Navasan HTTP {response.status}")
+                payload = await response.json(content_type=None)
     except (aiohttp.ClientError, TimeoutError, ValueError) as exc:
-        raise RuntimeError(str(exc)) from exc
+        raise RuntimeError(f"خطا در اتصال به نوسان: {exc}") from exc
+    rate = _extract_usd_sell(payload)
     if not rate:
-        raise RuntimeError("provider returned no valid USD sell rate")
+        raise RuntimeError("پاسخ نوسان شامل usd_sell معتبر نیست")
     return rate
 
 
@@ -66,16 +72,15 @@ async def refresh_rate() -> tuple[bool, str]:
     try:
         rate = await fetch_usd_rate()
         await db.set_setting("rate", f"{rate:g}")
-        await db.set_setting("rate_source", "live USD sell rate")
+        await db.set_setting("rate_source", "Navasan usd_sell")
         await db.set_setting("rate_updated_at", str(int(time.time())))
         await db.set_setting("pricing_paused", "0")
-        return True, f"{rate:,.0f}"
+        return True, f"{rate:,.0f} تومان"
     except Exception as exc:
-        # Manual pricing remains valid when the optional market API is unavailable.
-        if await db.get_setting("rate_source") == "live USD sell rate":
-            updated = await db.get_int("rate_updated_at", 0)
-            if updated and time.time() - updated > MAX_RATE_AGE:
-                await db.set_setting("pricing_paused", "1")
+        source = await db.get_setting("rate_source")
+        updated = await db.get_int("rate_updated_at", 0)
+        if source == "Navasan usd_sell" and updated and time.time() - updated > MAX_RATE_AGE:
+            await db.set_setting("pricing_paused", "1")
         return False, str(exc)
 
 
@@ -83,10 +88,7 @@ async def sales_allowed() -> bool:
     rate = await db.get_float("rate", 0)
     paused = await db.get_setting("pricing_paused") == "1"
     source = await db.get_setting("rate_source") or "manual fallback"
-
-    # Recover installations that were paused by an optional FX API failure.
-    # A positive admin-defined fallback rate is enough to price and sell safely.
-    if paused and source != "live USD sell rate" and rate > 0:
+    if paused and source not in ("Navasan usd_sell",) and rate > 0:
         await db.set_setting("pricing_paused", "0")
         paused = False
     return not paused and rate > 0
