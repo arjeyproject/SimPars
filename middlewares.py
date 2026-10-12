@@ -1,4 +1,4 @@
-"""SimPars - میدلور دسترسی (ثبت کاربر، مسدودی، تعمیرات، جوین اجباری، رفرال)"""
+"""میدلور دسترسی: ثبت کاربر، مسدودی، تعمیرات، جوین اجباری و شماره تماس."""
 from __future__ import annotations
 
 import logging
@@ -19,7 +19,6 @@ async def is_member(bot: Bot, user_id: int) -> bool:
     try:
         member = await bot.get_chat_member(CHANNEL_USERNAME, user_id)
     except Exception as exc:  # noqa: BLE001
-        # ربات در کانال ادمین نیست یا کانال اشتباه است؛ کاربر را مسدود نمی‌کنیم
         log.warning("force-join check failed: %s", exc)
         return True
     status = str(getattr(member.status, "value", member.status))
@@ -42,29 +41,18 @@ async def _handle_referral(bot: Bot, message: Message) -> None:
         return
     if await db.set_referrer(message.from_user.id, ref_id):
         try:
-            await bot.send_message(
-                ref_id,
-                "🎉 <b>یه دوست جدید با لینک دعوتت عضو شد!</b>\n"
-                "💰 از این به بعد از هر شارژش هدیه می‌گیری 🎁",
-            )
+            await bot.send_message(ref_id, "🎉 <b>یه دوست جدید با لینک دعوتت عضو شد!</b>\n💰 از این به بعد از هر شارژش هدیه می‌گیری 🎁")
         except Exception:  # noqa: BLE001
             pass
 
 
 class AccessMiddleware(BaseMiddleware):
-    async def __call__(
-        self,
-        handler: Callable[[TelegramObject, Dict[str, Any]], Awaitable[Any]],
-        event: TelegramObject,
-        data: Dict[str, Any],
-    ) -> Any:
+    async def __call__(self, handler: Callable[[TelegramObject, Dict[str, Any]], Awaitable[Any]], event: TelegramObject, data: Dict[str, Any]) -> Any:
         user = data.get("event_from_user")
         if user is None or user.is_bot:
             return await handler(event, data)
 
-        chat = event.chat if isinstance(event, Message) else (
-            event.message.chat if isinstance(event, CallbackQuery) and event.message else None
-        )
+        chat = event.chat if isinstance(event, Message) else (event.message.chat if isinstance(event, CallbackQuery) and event.message else None)
         if chat is not None and chat.type != "private":
             return None
 
@@ -81,6 +69,13 @@ class AccessMiddleware(BaseMiddleware):
             return await self._deny(event, texts.BANNED, alert="🚫 دسترسی شما مسدود است.")
         if await db.get_setting("maintenance") == "1":
             return await self._deny(event, texts.MAINTENANCE, alert="🛠 ربات در حال بروزرسانی است.")
+
+        # A contact message is the one event allowed before registration.
+        if isinstance(event, Message) and event.contact is not None:
+            return await handler(event, data)
+        if not row or not row["contact_phone"]:
+            return await self._deny(event, texts.CONTACT_REQUIRED, markup=kb.contact_request_kb())
+
         if await db.get_setting("force_join") == "1" and not await is_member(bot, user.id):
             if isinstance(event, CallbackQuery) and event.data == "joined":
                 await event.answer("❌ هنوز عضو کانال نشدی!", show_alert=True)
