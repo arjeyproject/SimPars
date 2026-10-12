@@ -65,7 +65,7 @@ async def cb_service(call: CallbackQuery) -> None:
     pages = max(1, math.ceil(len(items) / PAGE_SIZE))
     page = min(max(0, page), pages - 1)
     chunk = items[page * PAGE_SIZE:(page + 1) * PAGE_SIZE]
-    buttons = [(country, f"{country_title(country, countries)} • {price:,} ت") for country, price in chunk]
+    buttons = [(country, f"{country_title(country, countries)}\n💰 {price:,} تومان") for country, price in chunk]
     text = texts.CHOOSE_COUNTRY.format(service=f"<b>{service_title(product)}</b>", count=len(items), page=page + 1, pages=pages)
     await safe_edit(call, text, kb.countries_kb(product, buttons, page, pages))
 
