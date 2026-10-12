@@ -52,8 +52,12 @@ def operators_kb(product, country, items, page, pages):
     if page<pages-1: nav.append(btn("بعدی", f"ops:{product}:{country}:{page+1}"))
     rows += [nav, [btn("بازگشت به کشورها", f"srv:{product}:0")], [btn("🏠 منوی اصلی", "home")]]; return markup(rows)
 def confirm_kb(product, country, operator, enough):
-    rows=[[btn("تأیید و خرید", f"ok:{product}:{country}:{operator}")] if enough else [btn("شارژ کیف پول", "wallet")]
-    rows += [[btn("انتخاب اپراتور", f"cn:{product}:{country}")], [btn("🏠 منوی اصلی", "home")]]; return markup(rows)
+    if enough:
+        rows = [[btn("تأیید و خرید", f"ok:{product}:{country}:{operator}")]]
+    else:
+        rows = [[btn("شارژ کیف پول", "wallet")]]
+    rows += [[btn("انتخاب اپراتور", f"cn:{product}:{country}")], [btn("🏠 منوی اصلی", "home")]]
+    return markup(rows)
 def order_kb(order_id): return markup([[btn("بررسی دریافت کد", f"chk:{order_id}")], [btn("لغو و بازگشت وجه", f"cnl:{order_id}")]])
 def order_received_kb(order_id): return markup([[btn("بررسی پیامک جدید", f"chk:{order_id}")], [btn("اتمام سفارش", f"fin:{order_id}")], [btn("🏠 منوی اصلی", "home")]])
 def wallet_kb():
