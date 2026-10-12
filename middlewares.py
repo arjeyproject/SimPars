@@ -14,18 +14,26 @@ from config import ADMIN_IDS, CHANNEL_USERNAME
 
 log = logging.getLogger(__name__)
 CONTACT_REQUIRED = "🔐 برای فعال‌سازی حساب و ادامه استفاده، لطفاً شماره تماس خودت را با دکمه زیر ارسال کن. این شماره فقط برای شناسایی حساب و پشتیبانی سفارش‌ها ذخیره می‌شود."
+JOIN_SUPPORT_TEXT = "💙 با عضویت در کانال، از تخفیف‌ها، اطلاعیه‌های موجودی و خبرهای سیم‌پارس باخبر می‌شی. ممنون که از ما حمایت می‌کنی 🙏"
+JOIN_CHECK_ERROR = "⚠️ بررسی عضویت موقتاً ممکن نیست. چند لحظه بعد دوباره روی «عضو شدم» بزن."
 
 
 def contact_request_kb() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="📱 ارسال شماره تماس", request_contact=True)]], resize_keyboard=True, one_time_keyboard=True, input_field_placeholder="ارسال شماره تماس")
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="📱 ارسال شماره تماس", request_contact=True)]],
+        resize_keyboard=True,
+        one_time_keyboard=True,
+        input_field_placeholder="ارسال شماره تماس",
+    )
 
 
-async def is_member(bot: Bot, user_id: int) -> bool:
+async def is_member(bot: Bot, user_id: int) -> bool | None:
+    """Return None on an API error so the join lock never fails open."""
     try:
         member = await bot.get_chat_member(CHANNEL_USERNAME, user_id)
     except Exception as exc:  # noqa: BLE001
         log.warning("force-join check failed: %s", exc)
-        return True
+        return None
     status = str(getattr(member.status, "value", member.status))
     if status in ("left", "kicked"):
         return False
@@ -75,16 +83,23 @@ class AccessMiddleware(BaseMiddleware):
         if await db.get_setting("maintenance") == "1":
             return await self._deny(event, texts.MAINTENANCE, alert="🛠 ربات در حال بروزرسانی است.")
 
+        # Let the contact message through so the user can complete registration.
         if isinstance(event, Message) and event.contact is not None:
             return await handler(event, data)
         if not row or not row["contact_phone"]:
             return await self._deny(event, CONTACT_REQUIRED, markup=contact_request_kb())
 
-        if await db.get_setting("force_join") == "1" and not await is_member(bot, user.id):
-            if isinstance(event, CallbackQuery) and event.data == "joined":
-                await event.answer("❌ هنوز عضو کانال نشدی!", show_alert=True)
-                return None
-            return await self._deny(event, texts.FORCE_JOIN, markup=kb.join_kb())
+        if await db.get_setting("force_join") == "1":
+            membership = await is_member(bot, user.id)
+            if membership is not True:
+                if isinstance(event, CallbackQuery) and event.data == "joined":
+                    alert = "❌ هنوز عضویتت تأیید نشده؛ اول عضو کانال شو و دوباره امتحان کن." if membership is False else JOIN_CHECK_ERROR
+                    await event.answer(alert, show_alert=True)
+                    return None
+                message = texts.FORCE_JOIN + "\n\n" + JOIN_SUPPORT_TEXT
+                if membership is None:
+                    message += "\n\n" + JOIN_CHECK_ERROR
+                return await self._deny(event, message, markup=kb.join_kb())
         return await handler(event, data)
 
     @staticmethod
