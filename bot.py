@@ -9,7 +9,7 @@ from aiogram.types import BotCommand
 from aiohttp import web
 import config
 import database as db
-from handlers import admin, buy, catalog, checkout, fallback, recent_users, reports, user, wallet, market_admin
+from handlers import admin, buy, catalog, channel, checkout, fallback, recent_users, reports, user, wallet, market_admin
 from middlewares import AccessMiddleware
 from webserver import create_app
 from workers import order_worker
