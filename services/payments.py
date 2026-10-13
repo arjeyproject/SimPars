@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from urllib.parse import urlsplit
 from aiogram import Bot
 import database as db
 import keyboards as kb
@@ -17,11 +18,30 @@ async def get_merchant() -> str:
     if await db.get_setting("zibal_sandbox") == "1": return zarinpal.SANDBOX_MERCHANT
     return (await db.get_setting("zibal_merchant")).strip()
 
+def _canonical_base_url() -> str:
+    return (BASE_URL or "").strip().rstrip("/")
+
 async def get_callback_url() -> str:
-    custom = (await db.get_setting("zibal_callback")).strip()
-    if custom: return custom
-    if BASE_URL: return f"{BASE_URL}/zarinpal/callback"
-    return f"https://t.me/{BOT_USERNAME}"
+    """Return one canonical HTTPS callback origin.
+
+    A stale callback saved in the old admin setting can make ZarinPal reject a
+    transaction even when the registered domain is correct. The public BASE_URL
+    is authoritative; a saved value is used only when it has the same origin.
+    """
+    base = _canonical_base_url()
+    if not base.lower().startswith("https://"):
+        raise zarinpal.ZarinpalError("BASE_URL باید دقیقاً با https:// و دامنه ثبت‌شده زرین‌پال تنظیم شود")
+    saved = (await db.get_setting("zibal_callback")).strip().rstrip("/")
+    if saved:
+        try:
+            saved_parts, base_parts = urlsplit(saved), urlsplit(base)
+            if (saved_parts.scheme.lower(), saved_parts.netloc.lower()) != (base_parts.scheme.lower(), base_parts.netloc.lower()):
+                log.warning("Ignoring stale ZarinPal callback %s; canonical is %s", saved, base)
+            else:
+                return saved
+        except ValueError:
+            log.warning("Ignoring invalid saved ZarinPal callback: %s", saved)
+    return f"{base}/zarinpal/callback"
 
 async def notify_admins(bot: Bot, text: str) -> None:
     for admin_id in ADMIN_IDS:
@@ -46,8 +66,7 @@ async def process_payment(bot: Bot, track_id: str, notify_user: bool = True) -> 
         try:
             return await _process_payment(bot, track_id, notify_user)
         finally:
-            if not lock.locked():
-                _payment_locks.pop(str(track_id), None)
+            if not lock.locked(): _payment_locks.pop(str(track_id), None)
 
 async def _process_payment(bot: Bot, track_id: str, notify_user: bool = True) -> tuple[bool, str]:
     payment = await db.get_payment(track_id)
@@ -62,9 +81,8 @@ async def _process_payment(bot: Bot, track_id: str, notify_user: bool = True) ->
     ref = str(result.get("ref_id") or result.get("card_pan") or track_id)
     if not await db.mark_payment_paid(track_id, ref): return True, "✅ این تراکنش قبلاً تایید شده است."
     if purchase:
-        try:
-            ok, message = await finish_paid_purchase(bot, payment, purchase, ref)
-        except Exception:  # noqa: BLE001
+        try: ok, message = await finish_paid_purchase(bot, payment, purchase, ref)
+        except Exception:
             log.exception("finish_paid_purchase crashed for %s", track_id)
             await db.add_balance(payment["user_id"], int(payment["amount"]))
             ok, message = False, f"پرداخت تایید شد اما ثبت سفارش با خطا مواجه شد؛ مبلغ <b>{int(payment['amount']):,} تومان</b> به کیف پولت اضافه شد."
@@ -91,10 +109,6 @@ async def _process_payment(bot: Bot, track_id: str, notify_user: bool = True) ->
     return True, message
 
 async def reconcile_pending_payments(bot: Bot, min_age: int = 120, max_age: int = 1800, limit: int = 10) -> int:
-    """پرداخت‌هایی که کاربر بعد از پرداخت به سایت/ربات برنگشته را خودکار verify می‌کند.
-
-    بدون این، زرین‌پال تراکنش verify نشده را برمی‌گرداند و فروش از دست می‌رود.
-    """
     if not await get_merchant(): return 0
     now = int(time.time())
     async with db._db.execute("SELECT track_id FROM payments WHERE status='pending' AND created_at BETWEEN ? AND ? ORDER BY id DESC LIMIT ?", (now - max_age, now - min_age, int(limit))) as cur:
@@ -104,8 +118,6 @@ async def reconcile_pending_payments(bot: Bot, min_age: int = 120, max_age: int 
         try:
             ok, _ = await process_payment(bot, row["track_id"], notify_user=True)
             if ok: confirmed += 1
-        except Exception:  # noqa: BLE001
-            log.exception("reconcile %s failed", row["track_id"])
+        except Exception: log.exception("reconcile %s failed", row["track_id"])
         await asyncio.sleep(0.5)
-    if confirmed: log.info("reconciled %s abandoned payments", confirmed)
     return confirmed
