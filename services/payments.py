@@ -11,66 +11,63 @@ from utils import esc
 log = logging.getLogger(__name__)
 
 async def get_merchant() -> str:
-    if await db.get_setting("zibal_sandbox") == "1":
-        return "00000000-0000-0000-0000-000000000000"
+    if await db.get_setting("zibal_sandbox") == "1": return "00000000-0000-0000-0000-000000000000"
     return (await db.get_setting("zibal_merchant")).strip()
 
 async def get_callback_url() -> str:
     custom = (await db.get_setting("zibal_callback")).strip()
-    if custom:
-        return custom
-    if BASE_URL:
-        return f"{BASE_URL}/zarinpal/callback"
+    if custom: return custom
+    if BASE_URL: return f"{BASE_URL}/zarinpal/callback"
     return f"https://t.me/{BOT_USERNAME}"
 
 async def notify_admins(bot: Bot, text: str) -> None:
     for admin_id in ADMIN_IDS:
-        try:
-            await bot.send_message(admin_id, text)
-        except Exception:
-            pass
+        try: await bot.send_message(admin_id, text)
+        except Exception: pass
 
-async def process_payment(bot: Bot, track_id: str, notify_user: bool = True) -> tuple[bool, str]:
-    payment = await db.get_payment(track_id)
-    if not payment:
-        return False, "❌ تراکنش پیدا نشد."
-    if payment["status"] == "paid":
-        return True, "✅ این تراکنش قبلاً تایید و کیف پولت شارژ شده."
-    merchant = await get_merchant()
-    if not merchant:
-        return False, "⛔️ درگاه زرین‌پال تنظیم نشده است."
-    try:
-        data = await zarinpal.verify_payment(merchant, track_id, int(payment["amount"]) * 10)
-    except zarinpal.ZarinpalError as exc:
-        return False, f"⚠️ {exc}"
+async def _verify(merchant: str, payment, track_id: str):
+    try: data = await zarinpal.verify_payment(merchant, track_id, int(payment["amount"]) * 10)
+    except zarinpal.ZarinpalError as exc: return None, f"⚠️ {exc}"
     result = data.get("data") if isinstance(data.get("data"), dict) else {}
     code = result.get("code", data.get("code"))
-    if code not in (100, 101):
-        return False, "❌ پرداخت انجام نشده یا ناموفق بوده. اگر پول کم شده، با پشتیبانی تماس بگیر."
+    if code not in (100, 101): return None, "❌ پرداخت انجام نشده یا ناموفق بوده. اگر پول کم شده، با پشتیبانی تماس بگیر."
     paid_amount = result.get("amount")
     if paid_amount is not None and int(paid_amount) != int(payment["amount"]) * 10:
         log.warning("amount mismatch for %s: %s", track_id, paid_amount)
-        return False, "⚠️ مغایرت در مبلغ تراکنش! لطفاً با پشتیبانی تماس بگیر."
+        return None, "⚠️ مغایرت در مبلغ تراکنش! لطفاً با پشتیبانی تماس بگیر."
+    return result, ""
+
+async def process_payment(bot: Bot, track_id: str, notify_user: bool = True) -> tuple[bool, str]:
+    payment = await db.get_payment(track_id)
+    if not payment: return False, "❌ تراکنش پیدا نشد."
+    if payment["status"] == "paid": return True, "✅ این تراکنش قبلاً تایید و کیف پولت شارژ شده."
+    merchant = await get_merchant()
+    if not merchant: return False, "⛔️ درگاه زرین‌پال تنظیم نشده است."
+    from services.purchase_checkout import finish_paid_purchase, get_context
+    purchase = await get_context(track_id)
+    result, error = await _verify(merchant, payment, track_id)
+    if result is None: return False, error
     ref = str(result.get("ref_id") or result.get("card_pan") or track_id)
-    if not await db.mark_payment_paid(track_id, ref):
-        return True, "✅ این تراکنش قبلاً تایید و کیف پولت شارژ شده."
+    if not await db.mark_payment_paid(track_id, ref): return True, "✅ این تراکنش قبلاً تایید شده است."
+    if purchase:
+        ok, message = await finish_paid_purchase(bot, payment, purchase, ref)
+        if notify_user:
+            try: await bot.send_message(payment["user_id"], ("✅ پرداخت تایید شد.\n\n" + message), reply_markup=kb.back_main() if ok else kb.markup([[kb.btn("💰 کیف پول", "wallet")], [kb.btn("🏠 منوی اصلی", "home")]]))
+            except Exception: pass
+        await notify_admins(bot, f"💳 <b>خرید مستقیم تایید شد</b>\n\n👤 کاربر: <code>{payment['user_id']}</code>\n💵 مبلغ: <b>{payment['amount']:,} تومان</b>\n🧾 مرجع: <code>{esc(ref)}</code>")
+        return ok, message
     user_id, amount = payment["user_id"], payment["amount"]
     await db.add_balance(user_id, amount)
     user = await db.get_user(user_id)
     message = texts.PAYMENT_SUCCESS.format(amount=amount, ref=esc(ref), balance=user["balance"] if user else amount)
     if notify_user:
-        try:
-            await bot.send_message(user_id, message, reply_markup=kb.back_main())
-        except Exception:
-            pass
+        try: await bot.send_message(user_id, message, reply_markup=kb.back_main())
+        except Exception: pass
     if user and user["referrer_id"]:
-        percent = await db.get_float("referral_percent", 0)
-        bonus = int(amount * percent / 100)
+        percent = await db.get_float("referral_percent", 0); bonus = int(amount * percent / 100)
         if bonus > 0:
             await db.add_balance(user["referrer_id"], bonus)
-            try:
-                await bot.send_message(user["referrer_id"], f"🎁 <b>تبریک!</b> از شارژ دوستت <b>{bonus:,} تومان</b> هدیه گرفتی 🎉")
-            except Exception:
-                pass
+            try: await bot.send_message(user["referrer_id"], f"🎁 <b>تبریک!</b> از شارژ دوستت <b>{bonus:,} تومان</b> هدیه گرفتی 🎉")
+            except Exception: pass
     await notify_admins(bot, f"💳 <b>پرداخت زرین‌پال</b>\n\n👤 کاربر: <code>{user_id}</code>\n💵 مبلغ: <b>{amount:,} تومان</b>\n🧾 مرجع: <code>{esc(ref)}</code>")
     return True, message
