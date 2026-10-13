@@ -9,8 +9,8 @@ import database as db
 import keyboards as kb
 import texts
 from services import zarinpal
-from services.payments import get_callback_url, get_merchant, process_payment
-from utils import parse_number, safe_edit
+from services.payments import get_callback_url, get_merchant, is_sandbox, process_payment_result
+from utils import esc, parse_number, safe_edit
 router = Router()
 class WalletStates(StatesGroup): amount = State()
 async def _limits(): return await db.get_int("min_deposit", 10000), await db.get_int("max_deposit", 10000000)
@@ -19,11 +19,12 @@ async def _build_invoice(user_id: int, amount: int):
     if amount < low or amount > high: return texts.BAD_AMOUNT.format(min=low, max=high), kb.wallet_kb()
     merchant = await get_merchant()
     if not merchant: return texts.GATEWAY_DISABLED, kb.back_main()
-    try: authority = await zarinpal.create_payment(merchant, amount * 10, await get_callback_url(), description=f"شارژ کیف پول سیم‌پارس - کاربر {user_id}", order_id=f"{user_id}-{int(time.time())}")
-    except zarinpal.ZarinpalError as exc: return f"⚠️ <b>خطا در ایجاد فاکتور</b>\n\n{exc}", kb.back_main()
+    user = await db.get_user(user_id)
+    mobile = user["contact_phone"] if user and "contact_phone" in user.keys() else None
+    try: authority = await zarinpal.create_payment(merchant, amount * 10, await get_callback_url(), description=f"شارژ کیف پول سیم‌پارس - کاربر {user_id}", order_id=f"wallet-{user_id}-{int(time.time())}", mobile=mobile)
+    except zarinpal.ZarinpalError as exc: return f"⚠️ <b>خطا در ایجاد فاکتور</b>\n\n{esc(str(exc))}", kb.back_main()
     await db.create_payment(user_id, amount, authority)
-    sandbox = (await db.get_setting("zibal_sandbox")) == "1"
-    return texts.PAYMENT_CREATED.format(amount=amount), kb.payment_kb(zarinpal.payment_url(authority, sandbox=sandbox), authority)
+    return texts.PAYMENT_CREATED.format(amount=amount), kb.payment_kb(zarinpal.payment_url(authority, sandbox=await is_sandbox()), authority)
 @router.callback_query(F.data == "wallet")
 async def cb_wallet(call: CallbackQuery, state: FSMContext):
     await state.clear(); user = await db.get_user(call.from_user.id); low, high = await _limits(); await safe_edit(call, texts.WALLET.format(balance=user["balance"] if user else 0, min=low, max=high), kb.wallet_kb()); await call.answer()
@@ -45,6 +46,12 @@ async def msg_amount(message: Message, state: FSMContext):
 async def cb_verify(call: CallbackQuery):
     track_id = call.data.split(":", 1)[1]; payment = await db.get_payment(track_id)
     if not payment or payment["user_id"] != call.from_user.id: await call.answer("❌ تراکنش پیدا نشد.", show_alert=True); return
-    ok, message = await process_payment(call.bot, track_id, notify_user=False)
-    if ok: await call.answer("✅ پرداخت تایید شد!"); await safe_edit(call, message, kb.markup([[kb.btn("🛒 خرید شماره مجازی", "buy")], [kb.btn("🏠 منوی اصلی", "home")]]))
-    else: await call.answer(message, show_alert=True)
+    result = await process_payment_result(call.bot, track_id, notify_user=False)
+    if result.ok:
+        try: await call.answer("✅ پرداخت تایید شد!")
+        except Exception: pass
+        await safe_edit(call, result.message, result.markup or kb.back_main()); return
+    try: await call.answer(result.message[:190], show_alert=True)
+    except Exception:
+        try: await call.message.answer(result.message)
+        except Exception: pass
