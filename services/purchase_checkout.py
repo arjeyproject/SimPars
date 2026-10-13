@@ -60,7 +60,7 @@ async def create_invoice(user_id: int, payload: dict) -> tuple[str, int]:
     price, _, code = await resolve(payload)
     merchant = (await db.get_setting("zibal_merchant")).strip()
     if await db.get_setting("zibal_sandbox") == "1":
-        merchant = "00000000-0000-0000-0000-000000000000"
+        merchant = zarinpal.SANDBOX_MERCHANT
     if not merchant:
         raise zarinpal.ZarinpalError("درگاه زرین‌پال تنظیم نشده است")
     callback = (await db.get_setting("zibal_callback")).strip()
@@ -77,21 +77,37 @@ async def create_invoice(user_id: int, payload: dict) -> tuple[str, int]:
 
 
 async def finish_paid_purchase(bot: Bot, payment, payload: dict, ref: str) -> tuple[bool, str]:
+    """پس از تایید بانک: شماره را بخر، وگرنه همان مبلغ پرداختی را به کیف پول برگردان.
+
+    قیمت سفارش همیشه برابر مبلغ پرداخت‌شده ثبت می‌شود تا refund بعدی دقیقاً همان مبلغ باشد.
+    """
     user_id = int(payment["user_id"])
-    price, operator, coupon_code = await resolve(payload)
+    paid = int(payment["amount"])
+    refund_note = f"مبلغ <b>{paid:,} تومان</b> به کیف پولت برگشت خورد و می‌تونی شماره دیگه‌ای بخری."
+    try:
+        _, operator, coupon_code = await resolve(payload)
+    except Exception as exc:  # noqa: BLE001
+        await db.add_balance(user_id, paid)
+        log.warning("paid purchase resolve failed for %s: %s", user_id, exc)
+        return False, f"پرداخت تایید شد اما این شماره دیگر موجود نیست.\n{refund_note}"
     token = await db.get_setting("fivesim_api")
     if not token:
-        await db.add_balance(user_id, int(payment["amount"]))
-        return False, "درگاه تایید شد اما فروشگاه موقتاً در دسترس نیست؛ مبلغ به کیف پولت برگشت خورد."
+        await db.add_balance(user_id, paid)
+        return False, f"درگاه تایید شد اما فروشگاه موقتاً در دسترس نیست.\n{refund_note}"
     try:
         data = await FiveSimClient(token).buy(payload["country"], operator, payload["product"])
-    except FiveSimError as exc:
-        await db.add_balance(user_id, int(payment["amount"]))
+        fivesim_id = int(data["id"])
+    except Exception as exc:  # noqa: BLE001
+        await db.add_balance(user_id, paid)
         log.warning("paid purchase failed: %s", exc)
-        return False, f"پرداخت تایید شد اما رزرو شماره انجام نشد؛ مبلغ به کیف پولت برگشت خورد.\n\n{exc}"
-    order_id = await db.create_order(user_id, int(data["id"]), str(data.get("phone") or ""), payload["product"], payload["country"], str(data.get("operator") or operator), price, ORDER_LIFETIME)
+        detail = esc(str(exc)) if isinstance(exc, FiveSimError) else ""
+        return False, f"پرداخت تایید شد اما رزرو شماره انجام نشد.\n{refund_note}\n\n{detail}".strip()
+    order_id = await db.create_order(user_id, fivesim_id, str(data.get("phone") or ""), payload["product"], payload["country"], str(data.get("operator") or operator), paid, ORDER_LIFETIME)
     if coupon_code:
-        await coupons.consume(coupon_code)
+        try:
+            await coupons.consume(coupon_code)
+        except Exception:  # noqa: BLE001
+            log.warning("coupon consume failed: %s", coupon_code)
     countries = await fivesim.countries_safe()
-    message = texts.ORDER_CREATED.format(order_id=order_id, service=service_title(payload["product"]), country=country_title(payload["country"], countries), phone=esc(str(data.get("phone") or "")), price=price, minutes=ORDER_LIFETIME // 60)
+    message = texts.ORDER_CREATED.format(order_id=order_id, service=service_title(payload["product"]), country=country_title(payload["country"], countries), phone=esc(str(data.get("phone") or "")), price=paid, minutes=ORDER_LIFETIME // 60)
     return True, message
