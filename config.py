@@ -17,6 +17,13 @@ def _parse_ids(value: str) -> list[int]:
     return ids
 
 
+def _int(name: str, default: int) -> int:
+    try:
+        return int(float(os.getenv(name, "") or default))
+    except ValueError:
+        return default
+
+
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 ADMIN_IDS = _parse_ids(os.getenv("ADMIN_IDS", ""))
 BOT_USERNAME = os.getenv("BOT_USERNAME", "SimParsBot").strip().lstrip("@")
@@ -28,6 +35,16 @@ WEB_PORT = int(os.getenv("WEB_PORT", "8080") or 8080)
 BASE_URL = os.getenv("BASE_URL", "").strip().rstrip("/")
 _db_path = os.getenv("DB_PATH", "data/simpars.db").strip() or "data/simpars.db"
 DB_PATH = _db_path if os.path.isabs(_db_path) else os.path.join(BASE_DIR, _db_path)
+
+# ZarinPal (v4). Values in .env take priority over the admin-panel settings.
+# ZARINPAL_SANDBOX: "1" force sandbox, "0" force production, empty = admin toggle.
+ZARINPAL_MERCHANT_ID = os.getenv("ZARINPAL_MERCHANT_ID", "").strip()
+ZARINPAL_SANDBOX = os.getenv("ZARINPAL_SANDBOX", "").strip()
+ZARINPAL_CALLBACK_URL = os.getenv("ZARINPAL_CALLBACK_URL", "").strip().rstrip("/")
+ZARINPAL_TIMEOUT = _int("ZARINPAL_TIMEOUT", 20)
+# A pending invoice for the exact same number/price is reused inside this window
+# instead of opening a second gateway request (double clicks, retries).
+INVOICE_REUSE_SECONDS = _int("INVOICE_REUSE_SECONDS", 600)
 
 # Optional Bot API 9.4 custom emoji IDs. Leave empty until valid IDs are supplied.
 PREMIUM_EMOJI_SUCCESS = os.getenv("PREMIUM_EMOJI_SUCCESS", "").strip() or None

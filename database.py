@@ -10,15 +10,63 @@ from config import DB_PATH
 
 DEFAULT_SETTINGS = {"fivesim_api":"", "zibal_merchant":"", "zibal_sandbox":"0", "zibal_callback":"", "rate":"1200", "rate_source":"manual fallback", "rate_updated_at":"0", "pricing_paused":"0", "usd_rate_api_key":"", "usd_rate_url":"", "profit_percent":"30", "min_deposit":"10000", "max_deposit":"10000000", "force_join":"1", "force_join_channel":"", "maintenance":"0", "referral_percent":"5", "support_text":""}
 SUCCESS_STATUSES = ("RECEIVED", "FINISHED")
+SCHEMA_VERSION = "2"
 _db: aiosqlite.Connection | None = None
 
+# --- payments / invoices ------------------------------------------------------
+# status:          new -> pending -> paid            (request_failed / canceled)
+# delivery_status: awaiting -> processing -> delivered | failed | review | refunded
+# (only for kind='purchase'; wallet top-ups keep delivery_status NULL)
+_PAYMENT_COLUMNS = (
+    ("kind", "TEXT NOT NULL DEFAULT 'wallet'"),
+    ("invoice_id", "TEXT"),
+    ("amount_rial", "INTEGER"),
+    ("base_price", "INTEGER"),
+    ("discount_percent", "INTEGER NOT NULL DEFAULT 0"),
+    ("coupon", "TEXT"),
+    ("context", "TEXT"),
+    ("fingerprint", "TEXT"),
+    ("delivery_status", "TEXT"),
+    ("delivery_error", "TEXT"),
+    ("delivery_attempts", "INTEGER NOT NULL DEFAULT 0"),
+    ("order_id", "INTEGER"),
+    ("gateway_code", "INTEGER"),
+    ("paid_at", "INTEGER"),
+    ("updated_at", "INTEGER"),
+)
 
-async def init_db() -> None:
+
+async def _add_column(table: str, column: str, definition: str) -> None:
+    try:
+        await _db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+    except aiosqlite.OperationalError as exc:
+        if "duplicate column" not in str(exc).lower():
+            raise
+
+
+async def _migrate_payments() -> None:
+    """Additive, idempotent migration. Existing users/orders/payments are kept as-is."""
+    for column, definition in _PAYMENT_COLUMNS:
+        await _add_column("payments", column, definition)
+    await _db.executescript("""
+        CREATE TABLE IF NOT EXISTS payment_context(track_id TEXT PRIMARY KEY, payload TEXT NOT NULL);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_invoice ON payments(invoice_id);
+        CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status, kind, delivery_status);
+        CREATE INDEX IF NOT EXISTS idx_payments_user ON payments(user_id, fingerprint);
+    """)
+    # Legacy direct purchases stored their payload in payment_context.
+    await _db.execute("UPDATE payments SET kind='purchase', context=(SELECT payload FROM payment_context pc WHERE pc.track_id=payments.track_id) WHERE kind='wallet' AND track_id IN (SELECT track_id FROM payment_context)")
+    # Paid legacy purchases were already delivered or refunded by the old code: never re-deliver them.
+    await _db.execute("UPDATE payments SET delivery_status=CASE WHEN status='paid' THEN 'legacy' ELSE 'awaiting' END WHERE kind='purchase' AND delivery_status IS NULL")
+
+
+async def init_db(path: str | None = None) -> None:
     global _db
-    folder = os.path.dirname(DB_PATH)
+    path = path or DB_PATH
+    folder = os.path.dirname(path)
     if folder:
         os.makedirs(folder, exist_ok=True)
-    _db = await aiosqlite.connect(DB_PATH)
+    _db = await aiosqlite.connect(path)
     _db.row_factory = aiosqlite.Row
     await _db.execute("PRAGMA journal_mode=WAL")
     await _db.executescript("""
@@ -31,13 +79,11 @@ async def init_db() -> None:
         CREATE INDEX IF NOT EXISTS idx_users_ref ON users(referrer_id);
     """)
     for column, definition in (("contact_phone", "TEXT"), ("contact_updated_at", "INTEGER")):
-        try:
-            await _db.execute(f"ALTER TABLE users ADD COLUMN {column} {definition}")
-        except aiosqlite.OperationalError as exc:
-            if "duplicate column" not in str(exc).lower():
-                raise
+        await _add_column("users", column, definition)
+    await _migrate_payments()
     for key, value in DEFAULT_SETTINGS.items():
         await _db.execute("INSERT OR IGNORE INTO settings(key, value) VALUES(?, ?)", (key, value))
+    await _db.execute("INSERT INTO settings(key, value) VALUES('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (SCHEMA_VERSION,))
     await _db.commit()
 
 
@@ -190,7 +236,8 @@ async def transition_order(order_id: int, from_statuses: tuple, to_status: str) 
 
 
 async def create_payment(user_id: int, amount: int, track_id: str) -> None:
-    await _db.execute("INSERT OR IGNORE INTO payments(user_id, amount, track_id, created_at) VALUES(?, ?, ?, ?)", (user_id, int(amount), str(track_id), int(time.time())))
+    """Legacy helper (kept for compatibility)."""
+    await _db.execute("INSERT OR IGNORE INTO payments(user_id, amount, track_id, amount_rial, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?)", (user_id, int(amount), str(track_id), int(amount) * 10, int(time.time()), int(time.time())))
     await _db.commit()
 
 
@@ -199,13 +246,101 @@ async def get_payment(track_id: str):
         return await cur.fetchone()
 
 
-async def mark_payment_paid(track_id: str, ref_number: str) -> bool:
-    cur = await _db.execute("UPDATE payments SET status='paid', ref_number=? WHERE track_id=? AND status='pending'", (ref_number, str(track_id)))
+async def get_payment_by_invoice(invoice_id: str):
+    async with _db.execute("SELECT * FROM payments WHERE invoice_id=?", (str(invoice_id),)) as cur:
+        return await cur.fetchone()
+
+
+async def create_invoice_row(user_id: int, kind: str, invoice_id: str, amount: int, amount_rial: int, base_price: int | None = None, discount_percent: int = 0, coupon: str = "", context: str | None = None, fingerprint: str | None = None) -> None:
+    now = int(time.time())
+    await _db.execute(
+        "INSERT INTO payments(user_id, amount, track_id, status, kind, invoice_id, amount_rial, base_price, discount_percent, coupon, context, fingerprint, delivery_status, created_at, updated_at) VALUES(?, ?, NULL, 'new', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (user_id, int(amount), kind, invoice_id, int(amount_rial), base_price, int(discount_percent), coupon or "", context, fingerprint, "awaiting" if kind == "purchase" else None, now, now),
+    )
+    await _db.commit()
+
+
+async def attach_authority(invoice_id: str, authority: str) -> bool:
+    cur = await _db.execute("UPDATE payments SET track_id=?, status='pending', updated_at=? WHERE invoice_id=? AND status='new'", (str(authority), int(time.time()), invoice_id))
     await _db.commit()
     return cur.rowcount == 1
+
+
+async def fail_invoice_request(invoice_id: str, error: str) -> None:
+    await _db.execute("UPDATE payments SET status='request_failed', delivery_status=NULL, delivery_error=?, updated_at=? WHERE invoice_id=? AND status='new'", (str(error)[:500], int(time.time()), invoice_id))
+    await _db.commit()
+
+
+async def find_reusable_invoice(user_id: int, fingerprint: str, created_after: int):
+    async with _db.execute("SELECT * FROM payments WHERE user_id=? AND fingerprint=? AND status='pending' AND track_id IS NOT NULL AND created_at>=? ORDER BY id DESC LIMIT 1", (user_id, fingerprint, int(created_after))) as cur:
+        return await cur.fetchone()
+
+
+async def mark_payment_paid(track_id: str, ref_number: str, gateway_code: int | None = None) -> bool:
+    """Atomic pending/canceled -> paid. Exactly one caller can win."""
+    now = int(time.time())
+    cur = await _db.execute("UPDATE payments SET status='paid', ref_number=?, gateway_code=?, paid_at=?, updated_at=? WHERE track_id=? AND status IN ('pending', 'canceled')", (ref_number, gateway_code, now, now, str(track_id)))
+    await _db.commit()
+    return cur.rowcount == 1
+
+
+async def mark_payment_canceled(track_id: str) -> bool:
+    cur = await _db.execute("UPDATE payments SET status='canceled', updated_at=? WHERE track_id=? AND status='pending'", (int(time.time()), str(track_id)))
+    await _db.commit()
+    return cur.rowcount == 1
+
+
+async def claim_delivery(track_id: str, from_statuses: tuple = ("awaiting",)) -> bool:
+    """Atomic claim of a paid purchase for delivery; only one worker/callback gets True."""
+    marks = ",".join("?" * len(from_statuses))
+    cur = await _db.execute(f"UPDATE payments SET delivery_status='processing', delivery_attempts=delivery_attempts+1, updated_at=? WHERE track_id=? AND status='paid' AND kind='purchase' AND delivery_status IN ({marks})", (int(time.time()), str(track_id), *from_statuses))
+    await _db.commit()
+    return cur.rowcount == 1
+
+
+async def finish_delivery(track_id: str, order_id: int) -> bool:
+    cur = await _db.execute("UPDATE payments SET delivery_status='delivered', order_id=?, delivery_error=NULL, updated_at=? WHERE track_id=? AND delivery_status='processing'", (int(order_id), int(time.time()), str(track_id)))
+    await _db.commit()
+    return cur.rowcount == 1
+
+
+async def fail_delivery(track_id: str, error: str, status: str = "failed") -> bool:
+    cur = await _db.execute("UPDATE payments SET delivery_status=?, delivery_error=?, updated_at=? WHERE track_id=? AND delivery_status='processing'", (status, str(error)[:500], int(time.time()), str(track_id)))
+    await _db.commit()
+    return cur.rowcount == 1
+
+
+async def refund_delivery_to_wallet(track_id: str) -> bool:
+    """failed -> refunded and credit the paid amount once (single transaction)."""
+    try:
+        cur = await _db.execute("UPDATE payments SET delivery_status='refunded', updated_at=? WHERE track_id=? AND status='paid' AND delivery_status='failed'", (int(time.time()), str(track_id)))
+        if cur.rowcount != 1:
+            await _db.rollback()
+            return False
+        await _db.execute("UPDATE users SET balance=balance+(SELECT amount FROM payments WHERE track_id=?) WHERE user_id=(SELECT user_id FROM payments WHERE track_id=?)", (str(track_id), str(track_id)))
+        await _db.commit()
+        return True
+    except Exception:
+        await _db.rollback()
+        raise
+
+
+async def payments_to_reconcile(min_created: int, max_created: int, limit: int = 10):
+    async with _db.execute("SELECT * FROM payments WHERE status IN ('pending', 'canceled') AND track_id IS NOT NULL AND created_at BETWEEN ? AND ? ORDER BY id DESC LIMIT ?", (int(min_created), int(max_created), int(limit))) as cur:
+        return await cur.fetchall()
+
+
+async def paid_awaiting_delivery(limit: int = 10):
+    async with _db.execute("SELECT * FROM payments WHERE status='paid' AND kind='purchase' AND delivery_status='awaiting' ORDER BY id LIMIT ?", (int(limit),)) as cur:
+        return await cur.fetchall()
+
+
+async def stale_deliveries(updated_before: int, limit: int = 10):
+    async with _db.execute("SELECT * FROM payments WHERE status='paid' AND kind='purchase' AND delivery_status='processing' AND COALESCE(updated_at, created_at)<? ORDER BY id LIMIT ?", (int(updated_before), int(limit))) as cur:
+        return await cur.fetchall()
 
 
 async def stats() -> dict:
     day_ago = int(time.time()) - 86400
     marks = ",".join("?" * len(SUCCESS_STATUSES))
-    return {"users": await _scalar("SELECT COUNT(*) FROM users"), "new_users": await _scalar("SELECT COUNT(*) FROM users WHERE created_at>=?", (day_ago,)), "banned": await _scalar("SELECT COUNT(*) FROM users WHERE is_banned=1"), "orders": await _scalar("SELECT COUNT(*) FROM orders"), "success": await _scalar(f"SELECT COUNT(*) FROM orders WHERE status IN ({marks})", SUCCESS_STATUSES), "active": await _scalar("SELECT COUNT(*) FROM orders WHERE status='PENDING'"), "sales": await _scalar(f"SELECT SUM(price) FROM orders WHERE status IN ({marks})", SUCCESS_STATUSES), "sales_today": await _scalar(f"SELECT SUM(price) FROM orders WHERE status IN ({marks}) AND created_at>=?", (*SUCCESS_STATUSES, day_ago)), "deposits": await _scalar("SELECT SUM(amount) FROM payments WHERE status='paid'"), "balances": await _scalar("SELECT SUM(balance) FROM users")}
+    return {"users": await _scalar("SELECT COUNT(*) FROM users"), "new_users": await _scalar("SELECT COUNT(*) FROM users WHERE created_at>=?", (day_ago,)), "banned": await _scalar("SELECT COUNT(*) FROM users WHERE is_banned=1"), "orders": await _scalar("SELECT COUNT(*) FROM orders"), "success": await _scalar(f"SELECT COUNT(*) FROM orders WHERE status IN ({marks})", SUCCESS_STATUSES), "active": await _scalar("SELECT COUNT(*) FROM orders WHERE status='PENDING'"), "sales": await _scalar(f"SELECT SUM(price) FROM orders WHERE status IN ({marks})", SUCCESS_STATUSES), "sales_today": await _scalar(f"SELECT SUM(price) FROM orders WHERE status IN ({marks}) AND created_at>=?", (*SUCCESS_STATUSES, day_ago)), "deposits": await _scalar("SELECT SUM(amount) FROM payments WHERE status='paid' AND kind='wallet'"), "balances": await _scalar("SELECT SUM(balance) FROM users")}
