@@ -14,7 +14,8 @@ from services.orders import sync_order
 from services.payments import reconcile_pending_payments
 
 log = logging.getLogger(__name__)
-RECONCILE_INTERVAL = 180
+# هر ۶۰ ثانیه پرداخت‌های بی‌پاسخ (کاربری که به Callback برنگشت) خودکار بررسی می‌شوند.
+RECONCILE_INTERVAL = 60
 
 
 async def order_worker(bot: Bot) -> None:
