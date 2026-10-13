@@ -1,4 +1,4 @@
-"""Background order synchronization and pricing safety worker."""
+"""Background order synchronization, payment reconciliation and pricing safety worker."""
 from __future__ import annotations
 
 import asyncio
@@ -11,13 +11,16 @@ from config import CHECK_INTERVAL, MARKET_INTERVAL
 from services.fivesim import FiveSimError
 from services.market import refresh_rate
 from services.orders import sync_order
+from services.payments import reconcile_pending_payments
 
 log = logging.getLogger(__name__)
+RECONCILE_INTERVAL = 180
 
 
 async def order_worker(bot: Bot) -> None:
-    log.info("order and market workers started")
+    log.info("order, payment and market workers started")
     market_tick = 0
+    reconcile_tick = 0
     while True:
         try:
             if market_tick <= 0:
@@ -26,6 +29,13 @@ async def order_worker(bot: Bot) -> None:
                     log.warning("market rate refresh skipped: %s", detail)
                 market_tick = max(1, MARKET_INTERVAL // CHECK_INTERVAL)
             market_tick -= 1
+            if reconcile_tick <= 0:
+                try:
+                    await reconcile_pending_payments(bot)
+                except Exception:
+                    log.exception("payment reconcile failed")
+                reconcile_tick = max(1, RECONCILE_INTERVAL // CHECK_INTERVAL)
+            reconcile_tick -= 1
             if await db.get_setting("fivesim_api"):
                 for order in await db.active_orders():
                     try:
