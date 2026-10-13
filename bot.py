@@ -9,7 +9,7 @@ from aiogram.types import BotCommand
 from aiohttp import web
 import config
 import database as db
-from handlers import admin, buy, catalog, channel, checkout, fallback, recent_users, reports, user, wallet, market_admin
+from handlers import admin, buy, catalog, checkout, fallback, recent_users, reports, user, wallet, market_admin
 from middlewares import AccessMiddleware
 from webserver import create_app
 from workers import order_worker
@@ -20,19 +20,19 @@ def apply_gateway_branding() -> None:
     for name in ("WELCOME", "PAYMENT_CREATED", "ADMIN_HOME", "ADMIN_ZIBAL"):
         if hasattr(texts, name): setattr(texts, name, getattr(texts, name).replace("زیبال", "زرین‌پال").replace("zibal.ir", "zarinpal.com"))
     title, kind, back, hint = admin.SETTINGS.get("zibal_merchant", ("", "secret", "panel_zibal", ""))
-    admin.SETTINGS["zibal_merchant"] = ("💳 مرچنت زرین‌پال", kind, back, "مرچنت آیدی ۳۶ کاراکتری را از پنل زرین‌پال کپی کن و بفرست.")
-    admin.SETTINGS["zibal_callback"] = ("🌐 آدرس بازگشت زرین‌پال", "url", "panel_zibal", "آدرس کامل callback را بفرست. مثال:\n<code>https://prostoreshop.site/zarinpal/callback</code>")
+    admin.SETTINGS["zibal_merchant"] = ("💳 مرچنت زرین‌پال", kind, back, "مرچنت آیدی ۳۶ کاراکتری واقعی را از پنل زرین‌پال کپی کن و بفرست.")
+    admin.SETTINGS["zibal_callback"] = ("🌐 آدرس بازگشت زرین‌پال", "url", "panel_zibal", "آدرس کامل و عمومی HTTPS را بفرست. مثال:\n<code>https://pay.prostoreshop.site/zarinpal/callback</code>")
     original_menu, original_gateway = kb.admin_menu, kb.zibal_admin_kb
     def admin_menu(force_join, maintenance):
         result = original_menu(force_join, maintenance)
         result.inline_keyboard.insert(-1, [kb.btn("👥 کاربران اخیر", "adm_recent_users", style="primary")])
         result.inline_keyboard.insert(-1, [kb.btn("🎁 مدیریت کد تخفیف", "coupon_admin", style="primary")])
         for row in result.inline_keyboard:
-            for button in row:
-                button.text = button.text.replace("درگاه زیبال", "درگاه زرین‌پال")
+            for button in row: button.text = button.text.replace("درگاه زیبال", "درگاه زرین‌پال")
         return result
     def gateway_menu(sandbox, has_merchant):
         result = original_gateway(sandbox, has_merchant)
+        result.inline_keyboard.insert(1, [kb.btn("🌐 تنظیم آدرس Callback", "aset:zibal_callback", style="primary")])
         for row in result.inline_keyboard:
             for button in row:
                 button.text = button.text.replace("زیبال", "زرین‌پال").replace("zibal.ir", "zarinpal.com")
