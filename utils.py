@@ -24,7 +24,7 @@ def country_title(code: str, countries: dict | None = None) -> str:
 def service_title(code: str) -> str:
     emoji,title=texts.SERVICE_MAP.get(code,("📱",code.capitalize())); return f"{emoji} {title}"
 def calc_price(cost: float, rate: float, profit: float) -> int:
-    raw=float(cost)*float(rate)*(1+float(profit)/100); return max(1000,int(math.ceil(raw/100.0))*100
+    raw=float(cost)*float(rate)*(1+float(profit)/100); return max(1000,int(math.ceil(raw/100.0))*100)
 def mask(value: str) -> str:
     if not value: return "ثبت نشده"
     return value[:2]+"••••" if len(value)<=10 else value[:6]+"••••"+value[-4:]
