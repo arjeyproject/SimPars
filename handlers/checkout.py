@@ -10,7 +10,7 @@ import keyboards as kb
 import texts
 from config import ADMIN_IDS, ORDER_LIFETIME
 from services import coupons, fivesim, zarinpal
-from services.fivesim import FiveSimClient, FiveSimError
+from services.fivesim import FiveSimClient, FiveSimError, humanize
 from services.market import sales_allowed
 from services.purchase_checkout import create_invoice, resolve
 from utils import esc, phone_ltr, safe_edit, service_title
