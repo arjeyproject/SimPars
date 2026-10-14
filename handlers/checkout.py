@@ -13,7 +13,7 @@ from services import coupons, fivesim, zarinpal
 from services.fivesim import FiveSimClient, FiveSimError
 from services.market import sales_allowed
 from services.purchase_checkout import create_invoice, resolve
-from utils import esc, safe_edit, service_title
+from utils import esc, phone_ltr, safe_edit, service_title
 router = Router(); log = logging.getLogger(__name__)
 class CouponStates(StatesGroup):
     code = State(); create = State(); delete = State()
@@ -62,10 +62,10 @@ async def pay_wallet(call: CallbackQuery, state: FSMContext):
     except FiveSimError as exc: await call.answer(str(exc), show_alert=True); return
     if not await db.deduct_balance(call.from_user.id, price): await call.answer("موجودی کافی نیست؛ پرداخت مستقیم را بزن.", show_alert=True); return
     try: data = await FiveSimClient(await db.get_setting("fivesim_api")).buy(payload["country"], operator, payload["product"])
-    except FiveSimError as exc: await db.add_balance(call.from_user.id, price); await call.answer("خرید انجام نشد و مبلغ برگشت خورد.", show_alert=True); log.warning("wallet purchase failed: %s", exc); return
-    order_id = await db.create_order(call.from_user.id, int(data["id"]), str(data.get("phone") or ""), payload["product"], payload["country"], str(data.get("operator") or operator), price, ORDER_LIFETIME)
+    except FiveSimError as exc: await db.add_balance(call.from_user.id, price); await call.answer(humanize(exc), show_alert=True); log.warning("wallet purchase failed: %s", exc); return
+    phone = str(data.get("phone") or ""); order_id = await db.create_order(call.from_user.id, int(data["id"]), phone, payload["product"], payload["country"], str(data.get("operator") or operator), price, ORDER_LIFETIME)
     if coupon_code: await coupons.consume(coupon_code)
-    await state.clear(); await call.answer("✅ شماره رزرو شد"); await safe_edit(call, texts.ORDER_CREATED.format(order_id=order_id, service=service_title(payload["product"]), country=esc(payload["country"]), phone=esc(str(data.get("phone") or "")), price=price, minutes=ORDER_LIFETIME // 60), kb.order_kb(order_id))
+    await state.clear(); await call.answer("✅ شماره رزرو شد"); await safe_edit(call, texts.ORDER_CREATED.format(order_id=order_id, service=service_title(payload["product"]), country=esc(payload["country"]), phone=phone_ltr(phone), price=price, minutes=ORDER_LIFETIME // 60), kb.order_kb(order_id))
 @router.callback_query(F.data == "coupon_admin")
 async def coupon_admin(call: CallbackQuery):
     if not _is_admin(call.from_user.id): return
