@@ -25,34 +25,27 @@ def _provider_message(data: Any, fallback: str = "provider error") -> str:
     if isinstance(data, dict):
         for key in ("message", "error", "msg", "detail"):
             value = data.get(key)
-            if value:
-                return str(value)
-    if isinstance(data, list):
-        return "; ".join(str(item) for item in data)
+            if value: return str(value)
+    if isinstance(data, list): return "; ".join(str(item) for item in data)
     return str(data).strip() or fallback
 
-def _is_no_inventory(error: Exception) -> bool:
+def _retry_with_any(error: Exception) -> bool:
     text = str(error).lower().replace("_", " ")
-    return any(value in text for value in ("no free phone", "no free phones", "no phones", "no stock", "not available"))
+    return any(value in text for value in ("no free phone", "no phones", "no stock", "not available", "bad operator", "operator not found"))
 
 async def _request(path, token=None, params=None):
     headers = {"Accept": "application/json", "Content-Type": "application/json"}
-    if token:
-        headers["Authorization"] = f"Bearer {_normalize_token(token)}"
+    if token: headers["Authorization"] = f"Bearer {_normalize_token(token)}"
     try:
         async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
             async with session.get(API_BASE + path, headers=headers, params=params) as resp:
                 status, text = resp.status, await resp.text()
     except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
         raise FiveSimError(f"network error: {exc}") from exc
-    try:
-        data = json.loads(text)
-    except ValueError as exc:
-        raise FiveSimError(text.strip() or f"http {status}") from exc
-    if status == 401:
-        raise FiveSimError("unauthorized")
-    if status >= 400:
-        raise FiveSimError(_provider_message(data, f"http {status}"))
+    try: data = json.loads(text)
+    except ValueError as exc: raise FiveSimError(text.strip() or f"http {status}") from exc
+    if status == 401: raise FiveSimError("unauthorized")
+    if status >= 400: raise FiveSimError(_provider_message(data, f"http {status}"))
     return data
 
 def _options(operators: Any):
@@ -66,8 +59,7 @@ def _options(operators: Any):
     return sorted(result, key=lambda x: x[1])
 
 def _best(operators):
-    values = _options(operators)
-    return values[0] if values else None
+    values = _options(operators); return values[0] if values else None
 
 def _payload_for_product(payload, product):
     if isinstance(payload, dict) and product and isinstance(payload.get(product), dict): return payload[product]
@@ -134,7 +126,6 @@ class FiveSimClient:
     async def profile(self): return await _request("/user/profile", self.token)
 
     async def buy(self, country, operator, product):
-        """Buy using the selected operator, then retry with provider-side operator selection."""
         selected = str(operator or "any").strip() or "any"
         candidates = [selected] if selected.lower() == "any" else [selected, "any"]
         last_error = None
@@ -146,7 +137,7 @@ class FiveSimClient:
                 return data
             except FiveSimError as exc:
                 last_error = exc
-                if not _is_no_inventory(exc) or candidate.lower() == "any": raise
+                if candidate.lower() == "any" or not _retry_with_any(exc): raise
         raise last_error or FiveSimError("no free phones")
 
     async def check(self, order_id): return await _request(f"/user/check/{order_id}", self.token)
