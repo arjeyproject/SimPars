@@ -12,9 +12,15 @@ class FiveSimError(Exception): pass
 ERROR_MESSAGES={"unauthorized":"🔑 اتصال سرویس فروش تنظیم نشده یا کلید آن نامعتبر است.","no free phones":"😕 شماره‌ای برای این کشور موجود نیست.","not enough user balance":"⚠️ موجودی تامین‌کننده موقتاً کافی نیست.","not enough rating":"⚠️ امکان خرید موقتاً وجود ندارد.","no product":"❌ این سرویس موجود نیست.","bad country":"❌ کشور نامعتبر است.","bad operator":"❌ اپراتور نامعتبر است.","server offline":"🔌 سرور تامین‌کننده موقتاً در دسترس نیست.","order not found":"↩️ سفارش دیگر وجود ندارد؛ مبلغ به کیف پول برمی‌گردد.","order expired":"↩️ سفارش منقضی شده؛ مبلغ برمی‌گردد.","banned":"🚫 سفارش مسدود شد؛ مبلغ به کیف پول برمی‌گردد.","ban":"🚫 سفارش مسدود شد؛ مبلغ به کیف پول برمی‌گردد.","network error":"🌐 خطا در اتصال به سرویس فروش."}
 def humanize(error):
     text=str(error).lower(); return next((v for k,v in ERROR_MESSAGES.items() if k in text),"⚠️ خطا در ارتباط با سرویس فروش.")
+def _normalize_token(token: str) -> str:
+    """Accept either a raw 5sim key or a pasted 'Bearer <key>' value."""
+    value=str(token or "").strip()
+    if value.lower().startswith("bearer "):
+        value=value[7:].strip()
+    return value
 async def _request(path,token=None,params=None):
     headers={"Accept":"application/json"}
-    if token: headers["Authorization"]=f"Bearer {token}"
+    if token: headers["Authorization"]=f"Bearer {_normalize_token(token)}"
     try:
         async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
             async with session.get(API_BASE+path,headers=headers,params=params) as resp:
@@ -86,11 +92,17 @@ async def countries_safe():
     except FiveSimError: return _country_cache["data"] or {}
 class FiveSimClient:
     def __init__(self,token):
-        if not token: raise FiveSimError("unauthorized")
-        self.token=token
+        self.token=_normalize_token(token)
+        if not self.token: raise FiveSimError("unauthorized")
     async def profile(self): return await _request("/user/profile",self.token)
     async def buy(self,country,operator,product):
-        data=await _request(f"/user/buy/activation/{country}/{operator}/{product}",self.token)
+        """Buy with the selected operator, then let 5sim choose any operator if inventory moved."""
+        try:
+            data=await _request(f"/user/buy/activation/{country}/{operator}/{product}",self.token)
+        except FiveSimError as exc:
+            if str(exc).lower().find("no free phones") < 0 or str(operator).lower() == "any":
+                raise
+            data=await _request(f"/user/buy/activation/{country}/any/{product}",self.token)
         if not isinstance(data,dict) or "id" not in data or not data.get("phone"): raise FiveSimError(str(data))
         return data
     async def check(self,order_id): return await _request(f"/user/check/{order_id}",self.token)
