@@ -9,19 +9,15 @@ API_BASE="https://sintell.ir/panel/api.php"; _TIMEOUT=aiohttp.ClientTimeout(tota
 _catalog_cache=None; _catalog_cache_time=0.0
 class SintelError(Exception): pass
 ERROR_MESSAGES={"invalid key":"🔑 کلید API نامعتبر است.","key not found":"🔑 کلید API پیدا نشد.","unauthorized":"🔑 دسترسی API رد شد.","invalid service":"❌ سرویس نامعتبر است.","invalid link":"❌ لینک نامعتبر است.","invalid quantity":"❌ تعداد نامعتبر است.","quantity must be":"❌ تعداد باید بین حداقل و حداکثر باشد.","insufficient balance":"⚠️ موجودی پنل سینتل کافی نیست.","not enough funds":"⚠️ موجودی پنل سینتل کافی نیست.","service unavailable":"❌ این سرویس فعلاً موجود نیست.","rate limit":"⚠️ درخواست زیاد شده؛ کمی صبر کنید.","timeout":"⏱ سرویس سینتل دیر پاسخ داد.","network error":"🌐 خطا در اتصال به سینتل."}
-TELEGRAM_MARKERS=("telegram","تلگرام","t.me","channel","کانال","group","گروه","member","subscriber","reaction","ریاکشن")
-INSTAGRAM_MARKERS=("instagram","اینستا","insta","instagr.am","reels","ریلز","story","استوری","فالوور","followers")
+TELEGRAM_MARKERS=("telegram","تلگرام","t.me","channel","کانال","group","گروه","member","subscriber","reaction","ریاکشن"); INSTAGRAM_MARKERS=("instagram","اینستا","insta","instagr.am","reels","ریلز","story","استوری","فالوور","followers")
 def _humanize_error(error):
     raw=str(error).strip(); low=raw.lower()
     for key,msg in ERROR_MESSAGES.items():
         if key in low:return msg
     return f"⚠️ پاسخ سینتل قابل قبول نیست: {raw[:180]}" if raw else "⚠️ پاسخ خالی از سینتل دریافت شد."
 def clean_api_key(value:str)->str:
-    """Normalize pasted keys from Telegram/code blocks without changing the secret."""
-    value=str(value or "").strip().replace("\u200c","")
-    value=re.sub(r"^```(?:text|plain)?\s*|\s*```$", "", value, flags=re.I).strip()
-    value=value.strip(' \"\'<>')
-    if value.lower().startswith("bearer "): value=value[7:].strip()
+    value=str(value or "").strip().replace("\u200c",""); value=re.sub(r"^```(?:text|plain)?\s*|\s*```$","",value,flags=re.I).strip(); value=value.strip(' \"\'<>');
+    if value.lower().startswith("bearer "):value=value[7:].strip()
     return value.split()[0] if value.split() else ""
 def _as_int(v,default=0):
     try:return int(float(str(v).replace(",","").strip()))
@@ -35,6 +31,17 @@ def classify_service(s):
     return "telegram"
 def normalize_service(raw):
     result=dict(raw); result["service"]=_as_int(raw.get("service",raw.get("service_id",raw.get("id",0)))); result["min"]=_as_int(raw.get("min",raw.get("min_quantity",raw.get("minimum",0)))); result["max"]=_as_int(raw.get("max",raw.get("max_quantity",raw.get("maximum",0)))); result["rate"]=str(raw.get("rate",raw.get("price","0"))); result["name"]=str(raw.get("name",raw.get("service_name","سرویس نامشخص"))).strip(); result["_platform"]=classify_service(result); return result
+def _status_is_error(value): return str(value).strip().lower() in {"error","failed","fail","false","0","invalid","unauthorized"}
+def _provider_error(result,fallback=""):
+    if not isinstance(result,dict):return fallback
+    status=result.get("status")
+    # SINTELL can include a human-readable message alongside a successful balance.
+    # Only treat message as an error when status explicitly says failure, or when an error field is present.
+    for key in ("error","errors"):
+        value=result.get(key)
+        if value not in (None,"",False,0,"0","false","False","ok","success","true","1"):return str(value)
+    if _status_is_error(status):return str(result.get("message") or result.get("msg") or status)
+    return fallback
 async def _request(key,action,**params):
     key=clean_api_key(key)
     if not key:raise SintelError("invalid key")
@@ -48,24 +55,20 @@ async def _request(key,action,**params):
     try:result=json.loads(body)
     except json.JSONDecodeError as exc:raise SintelError(f"invalid JSON response: HTTP {status} {body[:120]}") from exc
     if status>=400:raise SintelError(_provider_error(result,f"HTTP {status}"))
-    if isinstance(result,dict):
-        error=_provider_error(result,"")
-        if error:raise SintelError(error)
+    error=_provider_error(result,"")
+    if error:raise SintelError(error)
     return result
-def _provider_error(result,fallback=""):
-    if isinstance(result,dict):
-        for key in ("error","errors","message","msg","detail"):
-            value=result.get(key)
-            if value and str(value).lower() not in ("ok","success","true","1"):return str(value)
-        if str(result.get("status","")).lower() in ("error","failed","fail","false","0"):return str(result.get("status"))
-    return fallback
 class SintelClient:
     def __init__(self,api_key):
         self.api_key=clean_api_key(api_key)
         if not self.api_key:raise SintelError("invalid key")
     async def get_balance(self):
         result=await _request(self.api_key,"balance")
-        if isinstance(result,dict):return float(result.get("balance",result.get("funds",result.get("credit",0))) or 0)
+        if isinstance(result,dict):
+            value=result.get("balance",result.get("funds",result.get("credit")))
+            if value is not None:
+                try:return float(value)
+                except (TypeError,ValueError):pass
         raise SintelError("invalid balance response")
     async def test_connection(self):return await _request(self.api_key,"balance")
     async def get_services(self,lang="fa",use_cache=True):
