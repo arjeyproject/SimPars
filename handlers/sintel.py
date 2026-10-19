@@ -12,32 +12,34 @@ from services.sintel_catalog import PLATFORM_LABELS,calculate_order_price,catego
 from services.sintel_orders import OrderResult,create_sintel_order,format_order_status_text,get_order_status_from_provider,get_sintel_order,get_user_sintel_orders
 from services.market import sales_allowed
 from utils import esc,safe_edit
-router=Router(); log=logging.getLogger(__name__); _locks:dict[int,asyncio.Lock]=defaultdict(asyncio.Lock)
-class SintelStates(StatesGroup): link=State(); quantity=State()
+router=Router();_locks:dict[int,asyncio.Lock]=defaultdict(asyncio.Lock)
+class SintelStates(StatesGroup): link=State();quantity=State()
 async def _pricing(service:dict,quantity:int)->tuple[int,int]:
-    profit=await db.get_setting("panelix_profit_percent") or await db.get_setting("profit_percent"); fx=await db.get_float("rate",0) if str(service.get("currency","" )).upper()=="USD" else 0
-    cost=calculate_order_price(service["rate"],quantity,unit=service.get("rate_unit",""),currency=service.get("currency",""),fx_rate=fx); return cost,int(cost*(1+float(profit or 0)/100)) if cost else 0
+    profit=await db.get_setting("panelix_profit_percent") or await db.get_setting("profit_percent");fx=await db.get_float("rate",0) if str(service.get("currency","")).upper()=="USD" else 0;cost=calculate_order_price(service["rate"],quantity,unit=service.get("rate_unit",""),currency=service.get("currency",""),fx_rate=fx);return cost,int(cost*(1+float(profit or 0)/100)) if cost else 0
 def _catalog_markup(platforms:list[str]):
     rows=[]
-    for i in range(0,len(platforms),2): rows.append([kb.btn(f"{PLATFORM_LABELS.get(p,("📱",p))[0]} {PLATFORM_LABELS.get(p,("📱",p))[1]}",f"stsc:{p}:all",style=("danger" if i//2%2==0 else "success")) for p in platforms[i:i+2]])
-    return kb.markup(rows+[ [kb.btn("🏠 منوی اصلی","home",style="primary")] ])
+    for i in range(0,len(platforms),2):
+        row=[]
+        for p in platforms[i:i+2]:
+            emoji,title=PLATFORM_LABELS.get(p,("📱",p));row.append(kb.btn(f"{emoji} {title}",f"stsc:{p}:all",style=("danger" if i//2%2==0 else "success")))
+        rows.append(row)
+    return kb.markup(rows+[[kb.btn("🏠 منوی اصلی","home",style="primary")]])
 @router.callback_query(F.data=="sintel")
 async def main(call:CallbackQuery):
     if not await db.get_setting("panelix_api"):await call.answer("❌ خدمات فعلاً آماده نیست.",show_alert=True);return
     services=await get_cached_catalog()
     if not services:await call.answer("❌ فهرست خدمات آماده نیست.",show_alert=True);return
-    platforms=sorted({s["platform"] for s in services},key=lambda p:list(PLATFORM_LABELS).index(p) if p in PLATFORM_LABELS else 99)
-    await safe_edit(call,"📣 <b>خدمات شبکه‌های اجتماعی</b>\n\nیکی از شبکه‌ها را انتخاب کنید.",_catalog_markup(platforms));await call.answer()
+    platforms=sorted({s["platform"] for s in services},key=lambda p:list(PLATFORM_LABELS).index(p) if p in PLATFORM_LABELS else 99);await safe_edit(call,"📣 <b>خدمات شبکه‌های اجتماعی</b>\n\nیکی از شبکه‌ها را انتخاب کنید.",_catalog_markup(platforms));await call.answer()
 @router.callback_query(F.data.startswith("stsc:"))
 async def category(call:CallbackQuery):
-    _,platform,_=call.data.split(":",2); services=await get_cached_catalog(platform); groups=sorted({s["subcategory"] for s in services})
+    _,platform,_=call.data.split(":",2);services=await get_cached_catalog(platform);groups=sorted({s["subcategory"] for s in services})
     if not groups:await call.answer("❌ خدمتی در این بخش نیست.",show_alert=True);return
     rows=[]
-    for i in range(0,len(groups),2): rows.append([kb.btn(f"📦 {category_label(platform,g)}",f"stgroup:{platform}:{g}",style=("danger" if i//2%2==0 else "success")) for g in groups[i:i+2]])
+    for i in range(0,len(groups),2):rows.append([kb.btn(f"📦 {category_label(platform,g)}",f"stgroup:{platform}:{g}",style=("danger" if i//2%2==0 else "success")) for g in groups[i:i+2]])
     await safe_edit(call,"🗂 <b>دسته خدمات</b>\n\nیک دسته را انتخاب کنید.",kb.markup(rows+[kb._social_back("sintel")]));await call.answer()
 @router.callback_query(F.data.startswith("stgroup:"))
 async def services(call:CallbackQuery):
-    _,platform,group=call.data.split(":",2); items=await get_catalog_by_subcategory(platform,group)
+    _,platform,group=call.data.split(":",2);items=await get_catalog_by_subcategory(platform,group)
     if not items:await call.answer("❌ خدمتی با قیمت تأییدشده پیدا نشد.",show_alert=True);return
     await safe_edit(call,"📦 <b>خدمات موجود</b>\n\nخدمت موردنظر را انتخاب کنید.",kb.sintel_services_list(items));await call.answer()
 @router.callback_query(F.data.startswith("stlg:"))
