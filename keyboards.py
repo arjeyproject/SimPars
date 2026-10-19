@@ -63,9 +63,12 @@ def sintel_services_list(ss):
     items=[(f"{s.get('display_name') or s.get('name','سرویس')[:34]} | حداقل {s.get('min_quantity',0):,}",f"stlg:{s['service_id']}") for s in ss]; rows=[]
     for i in range(0,len(items),2): rows.append([btn(label,callback,style=("danger" if i//2%2==0 else "success")) for label,callback in items[i:i+2]])
     return markup(rows+[_social_back("sintel")])
-def sintel_confirm_kb(ok): return markup([[btn("✅ تأیید سفارش","sintel_buy",style="success")] if ok else [btn("💳 شارژ کیف پول","sintel_wallet",style="success")],_social_back("sintel"))
+def sintel_confirm_kb(ok):
+    rows=[[btn("✅ تأیید سفارش","sintel_buy",style="success")] if ok else [btn("💳 شارژ کیف پول","sintel_wallet",style="success")]]
+    rows.append(_social_back("sintel"))
+    return markup(rows)
 def sintel_orders_kb(): return markup([[btn("🛒 خرید سرویس جدید","sintel",style="success")],[btn("🏠 منوی اصلی","home",style="primary")]])
-def sintel_order_detail_kb(i,s): return markup([[btn("🔄 بروزرسانی وضعیت",f"stch:{i}",style="primary")],_social_back("sintel_orders"))
+def sintel_order_detail_kb(i,s): return markup([[btn("🔄 بروزرسانی وضعیت",f"stch:{i}",style="primary")],_social_back("sintel_orders")])
 def sintel_admin_menu(s): return markup([[btn("🔑 تنظیم کلید API","sintel_set_api",style="primary")],[btn("🔌 بررسی اتصال پنلیکس","sintel_test_connection",style="primary")],[btn("📥 دریافت آخرین سرویس‌ها","sintel_sync_catalog",style="success")],[btn("🔄 بروزرسانی قیمت‌ها","panelix_prices",style="success")],[btn("📊 وضعیت همگام‌سازی","panelix_status",style="primary")],[btn("💰 تنظیم سود و قیمت فروش","panelix_set:panelix_profit_percent",style="primary")],[btn("💱 تنظیم واحد نرخ","panelix_set:panelix_rate_unit",style="primary"),btn("💵 تنظیم ارز","panelix_set:panelix_currency",style="primary")],[btn("⏱ تنظیم فاصله بروزرسانی","panelix_set:panelix_sync_interval",style="primary")],[btn("📋 گزارش خطاها","panelix_status",style="primary")],[btn("🔙 بازگشت به مدیریت پنلیکس","admin",style="primary")]])
 def sintel_catalog_menu(): return markup([[btn("📦 کاتالوگ خدمات","sintel_telegram",style="primary")],[btn("🔙 بازگشت به مدیریت پنلیکس","panel_sintel",style="primary")]])
 def sintel_admin_back(): return markup([[btn("🔙 بازگشت به مدیریت پنلیکس","panel_sintel",style="primary")]])
