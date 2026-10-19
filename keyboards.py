@@ -28,7 +28,10 @@ def product_kb(products,category="economic",page=0,pages=1):
     return markup(rows+[nav,[btn("🔙 بازگشت","buy",style="danger")],[btn("🏠 منوی اصلی","home",style="danger")]])
 def countries_kb(product,items,page,pages): return markup([[btn(a,b,style="primary"),btn(c,"noop",style="danger"),btn("🛒 خرید",b,style="success")] for a,c,b in items]+[[btn("🏠 منوی اصلی","home",style="danger")]])
 def operators_kb(product,country,items,page,pages): return markup([[btn(str(page*12+i+1),f"op:{product}:{country}:{page*12+i}",style="primary") for i in range(min(4,len(items)))],[btn("🏠 منوی اصلی","home",style="danger")]])
-def confirm_kb(product,country,operator,enough): return markup([[btn("✅ تأیید و خرید",f"ok:{product}:{country}:{operator}",style="success")],[btn("💳 شارژ کیف پول","wallet",style="success")] if not enough else [[btn("✅ تأیید و خرید",f"ok:{product}:{country}:{operator}",style="success")]] + [[btn("🏠 منوی اصلی","home",style="danger")]])
+def confirm_kb(product,country,operator,enough):
+    rows=[[btn("✅ تأیید و خرید",f"ok:{product}:{country}:{operator}",style="success")]]
+    if not enough: rows.append([btn("💳 شارژ کیف پول","wallet",style="success")])
+    rows.append([btn("🏠 منوی اصلی","home",style="danger")]); return markup(rows)
 def order_kb(i): return markup([[btn("🔄 بررسی دریافت کد",f"chk:{i}",style="primary")],[btn("❌ لغو و بازگشت وجه",f"cnl:{i}",style="danger")]])
 def order_received_kb(i): return order_kb(i)
 def wallet_kb(): return markup([[btn("💵 50,000 تومان","dep:50000",style="success"),btn("💵 100,000 تومان","dep:100000",style="success")],[btn("💵 200,000 تومان","dep:200000",style="success"),btn("💵 500,000 تومان","dep:500000",style="success")],[btn("✍️ مبلغ دلخواه","dep_custom",style="primary")],[btn("🏠 منوی اصلی","home",style="danger")]])
