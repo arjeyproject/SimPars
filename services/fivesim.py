@@ -1,4 +1,4 @@
-"""5Sim client with premium operator selection."""
+"""5SIM client with validated inventory and pinned operator selection."""
 from __future__ import annotations
 import asyncio, json, time
 from typing import Any
@@ -17,12 +17,11 @@ def _message(data,fallback="provider error"):
             if data.get(key): return str(data[key])
     return "; ".join(map(str,data)) if isinstance(data,list) else str(data).strip() or fallback
 async def _request(path,token=None,params=None):
-    headers={"Accept":"application/json","Content-Type":"application/json"}
+    headers={"Accept":"application/json"}
     if token: headers["Authorization"]=f"Bearer {_token(token)}"
     try:
         async with aiohttp.ClientSession(timeout=_TIMEOUT) as session:
-            async with session.get(API_BASE+path,headers=headers,params=params) as resp:
-                status,body=resp.status,await resp.text()
+            async with session.get(API_BASE+path,headers=headers,params=params) as resp: status,body=resp.status,await resp.text()
     except (aiohttp.ClientError,asyncio.TimeoutError) as exc: raise FiveSimError(f"network error: {exc}") from exc
     try: data=json.loads(body)
     except ValueError as exc: raise FiveSimError(body.strip() or f"http {status}") from exc
@@ -46,12 +45,12 @@ def _options(operators,country=None,product=None):
         result.append((str(operator),cost,count))
     return sorted(result,key=lambda x:x[1],reverse=True)
 def choose_operator(values,country="",product="",preferred=()):
-    """Choose premium stock: preferred operator, highest quality, then highest price, then stock."""
+    """Pin one currently stocked operator; prefer measured quality, then stock, then price."""
     if not values: return None
     preferred={str(x).strip().lower() for x in preferred if str(x).strip()}
     def key(item):
         op,cost,count=item; quality=_quality_cache.get((str(country),str(product),str(op)),0.0); pref=1 if op.lower() in preferred else 0
-        return (pref,quality,cost,count)
+        return (quality,pref,count,-cost)
     return max(values,key=key)
 def _best(operators,country=None,product=None,preferred=()): return choose_operator(_options(operators,country,product),country,product,preferred)
 def _payload(payload,product): return payload.get(product) if isinstance(payload,dict) and isinstance(payload.get(product),dict) else payload
@@ -105,16 +104,12 @@ class FiveSimClient:
         if not self.token: raise FiveSimError("unauthorized")
     async def profile(self): return await _request("/user/profile",self.token)
     async def buy(self,country,operator,product):
-        selected=str(operator or "any").strip() or "any"; candidates=[selected] if selected.lower()=="any" else [selected,"any"]; last=None
-        for candidate in candidates:
-            try:
-                data=await _request(f"/user/buy/activation/{country}/{candidate}/{product}",self.token)
-                if not isinstance(data,dict) or not data.get("id") or not data.get("phone"): raise FiveSimError(_message(data,"invalid purchase response"))
-                return data
-            except FiveSimError as exc:
-                last=exc
-                if candidate.lower()=="any" or not any(x in str(exc).lower() for x in ("no free phone","no phones","no stock","not available","bad operator","operator not found")): raise
-        raise last or FiveSimError("no free phones")
+        selected=str(operator or "").strip()
+        if not selected or selected.lower()=="any": raise FiveSimError("bad operator: a pinned operator is required")
+        data=await _request(f"/user/buy/activation/{country}/{selected}/{product}",self.token)
+        if not isinstance(data,dict) or not data.get("id") or not data.get("phone"): raise FiveSimError(_message(data,"invalid purchase response"))
+        if str(data.get("operator") or selected).strip().lower()!=selected.lower(): raise FiveSimError("invalid purchase response: operator changed")
+        return data
     async def check(self,order_id): return await _request(f"/user/check/{order_id}",self.token)
     async def cancel(self,order_id): return await _request(f"/user/cancel/{order_id}",self.token)
     async def finish(self,order_id): return await _request(f"/user/finish/{order_id}",self.token)

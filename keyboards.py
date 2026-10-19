@@ -9,7 +9,7 @@ def btn(text,callback=None,url=None,*,style=None,icon_custom_emoji_id=None): ret
 def markup(rows): return InlineKeyboardMarkup(inline_keyboard=rows)
 def onoff(value): return "✅ روشن" if value=="1" else "❌ خاموش"
 def main_menu(is_admin=False):
-    rows=[[btn("🛒 خرید شماره مجازی","buy",style="success")],[btn("👥 خدمات تلگرام","sintel_telegram",style="success")],[btn("📸 خدمات اینستاگرام","sintel_instagram",style="success")],[btn("💰 کیف پول","wallet",style="primary"),btn("👤 حساب من","account",style="primary")],[btn("📦 سفارش‌های من","orders",style="primary"),btn("📦 سفارشات خدمات","sintel_orders",style="primary")],[btn("🎁 دعوت دوستان","referral",style="primary"),btn("💬 پشتیبانی","support",style="primary")],[btn("📚 راهنما","help",style="primary")],[btn("📢 کانال ما",url=CHANNEL_URL,style="danger"),btn("📸 اینستاگرام",url=INSTAGRAM_URL,style="danger")]]
+    rows=[[btn("📱 خرید شماره مجازی","buy",style="success")],[btn("✈️ خدمات تلگرام","sintel_telegram",style="success"),btn("📸 خدمات اینستاگرام","sintel_instagram",style="success")],[btn("💰 کیف پول","wallet",style="primary"),btn("👤 حساب من","account",style="primary")],[btn("📦 سفارش‌های من","orders",style="primary"),btn("📦 سفارشات خدمات","sintel_orders",style="primary")],[btn("🎁 دعوت دوستان","referral",style="primary"),btn("💬 پشتیبانی","support",style="primary")],[btn("📚 راهنما","help",style="primary")],[btn("📢 کانال ما",url=CHANNEL_URL,style="danger"),btn("📸 اینستاگرام",url=INSTAGRAM_URL,style="danger")]]
     if is_admin: rows.append([btn("⚙️ پنل مدیریت","admin",style="primary")])
     return markup(rows)
 def back_main(): return markup([[btn("🏠 بازگشت به منوی اصلی","home",style="danger")]])
@@ -28,7 +28,7 @@ def product_kb(products,category="economic",page=0,pages=1):
     return markup(rows+[nav,[btn("🔙 بازگشت","buy",style="danger")],[btn("🏠 منوی اصلی","home",style="danger")]])
 def countries_kb(product,items,page,pages): return markup([[btn(a,b,style="primary"),btn(c,"noop",style="danger"),btn("🛒 خرید",b,style="success")] for a,c,b in items]+[[btn("🏠 منوی اصلی","home",style="danger")]])
 def operators_kb(product,country,items,page,pages): return markup([[btn(str(page*12+i+1),f"op:{product}:{country}:{page*12+i}",style="primary") for i in range(min(4,len(items)))],[btn("🏠 منوی اصلی","home",style="danger")]])
-def confirm_kb(product,country,operator,enough): return markup([[btn("✅ تأیید و خرید",f"ok:{product}:{country}:{operator}",style="success")] if enough else [btn("💳 شارژ کیف پول","wallet",style="success")],[btn("🏠 منوی اصلی","home",style="danger")]])
+def confirm_kb(product,country,operator,enough): return markup([[btn("✅ تأیید و خرید",f"ok:{product}:{country}:{operator}",style="success")],[btn("💳 شارژ کیف پول","wallet",style="success")] if not enough else [[btn("✅ تأیید و خرید",f"ok:{product}:{country}:{operator}",style="success")]] + [[btn("🏠 منوی اصلی","home",style="danger")]])
 def order_kb(i): return markup([[btn("🔄 بررسی دریافت کد",f"chk:{i}",style="primary")],[btn("❌ لغو و بازگشت وجه",f"cnl:{i}",style="danger")]])
 def order_received_kb(i): return order_kb(i)
 def wallet_kb(): return markup([[btn("💵 50,000 تومان","dep:50000",style="success"),btn("💵 100,000 تومان","dep:100000",style="success")],[btn("💵 200,000 تومان","dep:200000",style="success"),btn("💵 500,000 تومان","dep:500000",style="success")],[btn("✍️ مبلغ دلخواه","dep_custom",style="primary")],[btn("🏠 منوی اصلی","home",style="danger")]])
@@ -50,7 +50,7 @@ def sintel_platform_menu(p):
 def sintel_services_list(ss): return markup([[btn(f"{s.get('name','سرویس')[:38]} | حداقل {s.get('min_quantity',0):,}",f"stlg:{s['service_id']}",style="primary")] for s in ss]+[[btn("🔙 بازگشت","home",style="danger")]])
 def sintel_confirm_kb(ok): return markup([[btn("✅ ثبت سفارش","sintel_buy",style="success")] if ok else [btn("💳 شارژ کیف پول","sintel_wallet",style="success")],[btn("🔙 بازگشت","home",style="danger")]])
 def sintel_orders_kb(): return markup([[btn("🔌 خرید سرویس جدید","sintel_telegram",style="success")],[btn("🏠 منوی اصلی","home",style="danger")]])
-def sintel_order_detail_kb(i,s): return markup([[btn("🔄 بروزرسانی وضعیت",f"stch:{i}",style="primary")],[btn("🔙 سفارشات سینتل","sintel_orders",style="danger")],[btn("🏠 منوی اصلی","home",style="danger")]])
+def sintel_order_detail_kb(i,s): return markup([[btn("🔄 بروزرسانی وضعیت",f"stch:{i}",style="primary")],[btn("🔙 سفارشات خدمات","sintel_orders",style="danger")],[btn("🏠 منوی اصلی","home",style="danger")]])
 def sintel_admin_menu(s): return markup([[btn("🔑 تنظیم / تغییر API","sintel_set_api",style="primary")],[btn(f"🔌 فعال/غیرفعال: {'روشن' if s.get('enabled') else 'خاموش'}","sintel_toggle",style="success")],[btn("🔄 تست اتصال","sintel_test_connection",style="primary")],[btn("🔄 همگام‌سازی کاتالوگ","sintel_sync_catalog",style="success")],[btn("📦 مشاهده کاتالوگ","sintel_view_catalog",style="primary")],[btn("📈 تنظیم درصد سود","sintel_set_profit",style="primary")],[btn("🔙 بازگشت به پنل","admin",style="danger")]])
 def sintel_catalog_menu(): return markup([[btn("👥 کاتالوگ تلگرام","sintel_cat:telegram",style="primary")],[btn("📸 کاتالوگ اینستاگرام","sintel_cat:instagram",style="primary")],[btn("🔙 بازگشت به پنل سینتل","panel_sintel",style="danger")]])
 def sintel_admin_back(): return markup([[btn("🔙 بازگشت به پنل سینتل","panel_sintel",style="danger")]])
