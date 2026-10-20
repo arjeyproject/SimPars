@@ -19,8 +19,8 @@ def flag(iso: str) -> str:
     if len(iso)!=2 or not iso.isalpha(): return "🌐"
     return "".join(chr(0x1F1E6+ord(ch)-ord("a")) for ch in iso)
 def country_title(code: str, countries: dict | None = None) -> str:
-    info=(countries or {}).get(code) or {}; iso_map=info.get("iso") or {}; iso=next(iter(iso_map), "") if isinstance(iso_map,dict) else ""
-    name=_COUNTRY_FA.get(str(code).lower()) or texts.COUNTRY_FA.get(str(code).lower(), "") or texts.COUNTRY_EN.get(code) or info.get("text_en") or code.replace("_", " ").replace("-", " ").title()
+    code_key=str(code or "").lower(); info=(countries or {}).get(code) or {}; iso_map=info.get("iso") or {}; iso=next(iter(iso_map), "") if isinstance(iso_map,dict) else ""
+    fa_map=getattr(texts,"COUNTRY_FA",{}) or {}; name=_COUNTRY_FA.get(code_key) or fa_map.get(code_key) or texts.COUNTRY_EN.get(code_key) or info.get("text_en") or code_key.replace("_", " ").replace("-", " ").title()
     return f"{flag(iso)} {name}"
 def service_title(code: str) -> str:
     emoji,title=texts.SERVICE_MAP.get(code,("📱",code.capitalize())); return f"{emoji} {title}"
