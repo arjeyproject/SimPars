@@ -5,14 +5,13 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 import texts
 from config import CHANNEL_USERNAME, INSTAGRAM_ID, OWNER_USERNAME
 CHANNEL_URL="https://t.me/"+CHANNEL_USERNAME.lstrip("@"); OWNER_URL=f"https://t.me/{OWNER_USERNAME.lstrip('@')}"; INSTAGRAM_URL=f"https://instagram.com/{INSTAGRAM_ID.lstrip('@')}"
-# Telegram inline buttons do not support custom background colours. These markers
-# provide a stable green/blue/orange visual key for the three country columns.
 COLUMN_STYLES=("primary","success","danger")
 COUNTRY_COLUMN_MARKERS=("🟩","🟦","🟧")
 PLATFORM_EMOJI={"telegram":"✈️","instagram":"🌸","whatsapp":"💚","openai":"🤖","google":"🔎","facebook":"📘","twitter":"🐦","tiktok":"🎵","discord":"🎮","microsoft":"🪟","amazon":"📦","snapchat":"👻","viber":"🪻","signal":"🛡","linkedin":"💼","yahoo":"📨","netflix":"🎬","paypal":"💳","steam":"🕹","imo":"🗨","line":"🫧","wechat":"🧧","uber":"🚕","apple":"🍏","yandex":"🟥","binance":"🪙","ebay":"🛍","airbnb":"🏠","spotify":"🎧","twitch":"🟪","mailru":"📬","proton":"🔐","bolt":"⚡️","revolut":"🏦","tinder":"🔥","bumble":"🐝","nike":"👟","other":"🌐"}
 def btn(text,callback=None,url=None,*,style=None,icon_custom_emoji_id=None): return InlineKeyboardButton(text=text,url=url,callback_data=None if url else (callback or "noop"),style=style,icon_custom_emoji_id=icon_custom_emoji_id)
 def markup(rows): return InlineKeyboardMarkup(inline_keyboard=rows)
 def onoff(value): return "✅ روشن" if value=="1" else "❌ خاموش"
+def _social_back(callback="sintel",back_style="primary"): return [btn("🔙 بازگشت",callback,style=back_style),btn("🏠 منوی اصلی","home",style="primary")]
 def main_menu(is_admin=False):
     rows=[[btn("📱 خرید شماره مجازی","buy",style="success")],[btn("📣 خدمات شبکه‌های اجتماعی","sintel",style="success")],[btn("💰 کیف پول","wallet",style="primary"),btn("👤 حساب من","account",style="primary")],[btn("📦 سفارش‌های من","orders",style="primary"),btn("📦 سفارشات خدمات","sintel_orders",style="primary")],[btn("🎁 دعوت دوستان","referral",style="primary"),btn("💬 پشتیبانی","support",style="primary")],[btn("📚 راهنما","help",style="primary")],[btn("📢 کانال ما",url=CHANNEL_URL,style="danger"),btn("📸 اینستاگرام",url=INSTAGRAM_URL,style="danger")]]
     if is_admin: rows.append([btn("⚙️ پنل مدیریت","admin",style="primary")])
@@ -26,7 +25,6 @@ def _platform_name(p):
     code=str(p or "").strip().lower(); emoji,title=texts.SERVICE_MAP.get(code,(None,code.replace("_"," ").replace("-"," ").title()))
     return f"{PLATFORM_EMOJI.get(code) or emoji or '🔸'} {title}"
 def _platform_grid(products,category):
-    """سه‌ستونه و بر پایهٔ پلتفرم‌های واقعاً برگشتی از کاتالوگ provider."""
     products=list(products or []); rows=[]
     for i in range(0,len(products),3): rows.append([btn(_platform_name(p),f"srv:{p}:0:{category}",style=COLUMN_STYLES[col]) for col,p in enumerate(products[i:i+3])])
     return rows
@@ -40,10 +38,6 @@ def platforms_kb(products,category="economic",page=0,pages=1):
 def storefront_kb(products=None): return platforms_kb(products)
 def product_kb(products,category="economic",page=0,pages=1): return platforms_kb(products,category,page,pages)
 def countries_kb(product,items,page=0,pages=1):
-    """اطلاعات هر کشور در سه ستون ثابت: کشور، قیمت، خرید.
-    Telegram رنگ پس‌زمینهٔ سفارشی ندارد؛ نشانگر هر ستون رنگ معنایی آن را مشخص می‌کند.
-    همهٔ سه دکمهٔ یک ردیف callback یکسان و مخصوص همان کشور دارند.
-    """
     rows=[]
     for name,price,cb in items:
         rows.append([btn(f"{COUNTRY_COLUMN_MARKERS[0]} {name}",cb,style="primary"),btn(f"{COUNTRY_COLUMN_MARKERS[1]} {price}",cb,style="success"),btn(f"{COUNTRY_COLUMN_MARKERS[2]} خرید",cb,style="danger")])
@@ -79,7 +73,7 @@ def sintel_services_list(ss):
         rows.append([btn(name,cb,style=COLUMN_STYLES[0]),btn(_quality(s),cb,style=COLUMN_STYLES[1]),btn(f"حداقل {int(s.get('min_quantity') or 0):,}",cb,style=COLUMN_STYLES[2])])
     return markup(rows+[_social_back("sintel")])
 def sintel_confirm_kb(ok):
-    rows=[[btn("✅ تأیید سفارش","sintel_buy",style="success")] if ok else [btn("💳 شارژ کیف پول","sintel_wallet",style="success")]]; rows.append(_social_back("sintel")); return markup(rows)
+    rows=[[btn("✅ تأیید سفارش","sintel_buy",style="success")] if ok else [btn("💳 شارژ کیف پول","sintel_wallet",style="success")]; rows.append(_social_back("sintel")); return markup(rows)
 def sintel_orders_kb(): return markup([[btn("🛒 خرید سرویس جدید","sintel",style="success")],[btn("🏠 منوی اصلی","home",style="primary")]])
 def sintel_order_detail_kb(i,s): return markup([[btn("🔄 بروزرسانی وضعیت",f"stch:{i}",style="primary")],_social_back("sintel_orders")])
 def sintel_admin_menu(s): return markup([[btn("🔑 تنطیم کلید API","sintel_set_api",style="primary")],[btn("🔌 بررسی اتصال پنلیکس","sintel_test_connection",style="primary")],[btn("📥 دریافت آخرین سرویس‌ها","sintel_sync_catalog",style="success")],[btn("🔄 بروزرسانی قیمت‌ها","panelix_prices",style="success")],[btn("📊 وضعیت همگام‌سازی","panelix_status",style="primary")],[btn("💰 تنطیم سود و قیمت فروش","panelix_set:panelix_profit_percent",style="primary")],[btn("💱 تنطیم واحد نرخ","panelix_set:panelix_rate_unit",style="primary"),btn("💵 تنطیم ارز","panelix_set:panelix_currency",style="primary")],[btn("⏱ تنطیم فاصله بروزرسانی","panelix_set:panelix_sync_interval",style="primary")],[btn("📋 گزارش خطاها","panelix_status",style="primary")],[btn("🔙 بازگشت به مدیریت پنلیکس","admin",style="primary")]])
