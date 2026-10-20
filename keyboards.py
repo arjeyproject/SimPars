@@ -20,10 +20,8 @@ def join_kb(): return markup([[btn("📢 عضویت در کانال سیم‌پ�
 def services_kb(): return product_kb([x[0] for x in texts.SERVICES])
 def storefront_kb(products=None):
     """صفحه اول خرید: پلتفرم‌ها در شبکه سه‌ستونه."""
-    products=list(products or [])
-    rows=[]
-    for i in range(0,len(products),3):
-        rows.append([btn(_platform_name(p),f"srv:{p}:0:economic",style=("primary" if i//3%2==0 else "success")) for p in products[i:i+3]])
+    products=list(products or []); rows=[]
+    for i in range(0,len(products),3): rows.append([btn(_platform_name(p),f"srv:{p}:0:economic",style=("primary" if i//3%2==0 else "success")) for p in products[i:i+3]])
     return markup(rows+[_social_back("home",back_style="danger")])
 def _platform_name(p):
     e,t=texts.SERVICE_MAP.get(p,("🔹",p.replace("_"," ").replace("-"," "))); return f"{e} {t}"
@@ -37,8 +35,7 @@ def product_kb(products,category="economic",page=0,pages=1):
         if page<pages-1: nav.append(btn("صفحه بعد ➡️",f"cat:{category}:{page+1}",style="primary"))
     return markup(rows+([nav] if nav else [])+[_social_back("home",back_style="danger")])
 def countries_kb(product,items,page=0,pages=1):
-    rows=[[btn(name,cb,style="primary"),btn(price,cb),btn("🛒 خرید",cb,style="success")] for name,price,cb in items]
-    nav=[]
+    rows=[[btn(name,cb,style="primary"),btn(price,cb),btn("🛒 خرید",cb,style="success")] for name,price,cb in items]; nav=[]
     if page>0: nav.append(btn("⬅️ صفحه قبل",f"srv:{product}:{page-1}:economic",style="primary"))
     if page<pages-1: nav.append(btn("صفحه بعد ➡️",f"srv:{product}:{page+1}:economic",style="primary"))
     return markup(rows+([nav] if nav else [])+[_social_back("buy",back_style="danger")])
@@ -61,7 +58,7 @@ def price_admin_kb(): return markup([[btn("💱 نرخ تبدیل","aset:rate",s
 def market_admin_kb(a,b): return admin_back("panel_price")
 def user_manage_kb(uid,banned): return markup([[btn("➕ افزایش موجودی",f"ubal:{uid}:add",style="success"),btn("➖ کسر موجودی",f"ubal:{uid}:sub",style="danger")],[btn("✅ رفع مسدودی" if banned else "🚫 مسدود کردن",f"uban:{uid}",style="danger")],[btn("🔍 جستجوی کاربر دیگر","adm_user",style="primary")],[btn("🔙 بازگشت به پنل","admin",style="primary")]])
 def broadcast_confirm_kb(): return markup([[btn("✅ ارسال برای همه","bc_send",style="success")],[btn("❌ انصراف","admin",style="danger")]])
-def sintel_main_menu(): return markup([[btn("🛒 انتخاب خدمات","sintel_telegram","style="success")],[btn("📦 سفارشات من","sintel_orders",style="primary")],[btn("🏠 منوی اصلی","home",style="primary")]])
+def sintel_main_menu(): return markup([[btn("🛒 انتخاب خدمات","sintel_telegram",style="success")],[btn("📦 سفارشات من","sintel_orders",style="primary")],[btn("🏠 منوی اصلی","home",style="primary")]])
 def sintel_platform_menu(p):
     from services.sintel_catalog import PLATFORM_LABELS
     e,t=PLATFORM_LABELS.get(p,("📱",p)); return markup([[btn(f"{e} {t}",f"stsc:{p}:all",style="danger")],_social_back("sintel")])
@@ -72,13 +69,11 @@ def _quality(s):
 def sintel_services_list(ss):
     rows=[]
     for s in ss:
-        cb=f"stlg:{s['service_id']}";name=(s.get('display_name') or s.get('name') or 'سرویس')[:28]
+        cb=f"stlg:{s['service_id']}"; name=(s.get('display_name') or s.get('name') or 'سرویس')[:28]
         rows.append([btn(name,cb,style="primary"),btn(_quality(s),cb),btn(f"حداقل {int(s.get('min_quantity') or 0):,}",cb,style="success")])
     return markup(rows+[_social_back("sintel")])
 def sintel_confirm_kb(ok):
-    rows=[[btn("✅ تأیید سفارش","sintel_buy",style="success")] if ok else [btn("💳 شارژ کیف پول","sintel_wallet",style="success")]]
-    rows.append(_social_back("sintel"))
-    return markup(rows)
+    rows=[[btn("✅ تأیید سفارش","sintel_buy",style="success")] if ok else [btn("💳 شارژ کیف پول","sintel_wallet",style="success")]]; rows.append(_social_back("sintel")); return markup(rows)
 def sintel_orders_kb(): return markup([[btn("🛒 خرید سرویس جدید","sintel",style="success")],[btn("🏠 منوی اصلی","home",style="primary")]])
 def sintel_order_detail_kb(i,s): return markup([[btn("🔄 بروزرسانی وضعیت",f"stch:{i}",style="primary")],_social_back("sintel_orders")])
 def sintel_admin_menu(s): return markup([[btn("🔑 تنظیم کلید API","sintel_set_api",style="primary")],[btn("🔌 بررسی اتصال پنلیکس","sintel_test_connection",style="primary")],[btn("📥 دریافت آخرین سرویس‌ها","sintel_sync_catalog",style="success")],[btn("🔄 بروزرسانی قیمت‌ها","panelix_prices",style="success")],[btn("📊 وضعیت همگام‌سازی","panelix_status",style="primary")],[btn("💰 تنظیم سود و قیمت فروش","panelix_set:panelix_profit_percent",style="primary")],[btn("💱 تنظیم واحد نرخ","panelix_set:panelix_rate_unit",style="primary"),btn("💵 تنظیم ارز","panelix_set:panelix_currency",style="primary")],[btn("⏱ تنظیم فاصله بروزرسانی","panelix_set:panelix_sync_interval",style="primary")],[btn("📋 گزارش خطاها","panelix_status",style="primary")],[btn("🔙 بازگشت به مدیریت پنلیکس","admin",style="primary")]])
