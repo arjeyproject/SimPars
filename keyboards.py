@@ -18,23 +18,29 @@ def back_to(c,text="🔙 بازگشت"): return markup([[btn(text,c,style="prima
 def cancel_kb(c="home"): return markup([[btn("انصراف",c,style="primary")]])
 def join_kb(): return markup([[btn("📢 عضویت در کانال سیم‌پارس",url=CHANNEL_URL,style="primary")],[btn("✅ عضو شدم","joined",style="success")]])
 def services_kb(): return product_kb([x[0] for x in texts.SERVICES])
-def storefront_kb(products=None): return markup([[btn("💎 خرید اقتصادی","cat:economic:0",style="primary")],[btn("🏠 منوی اصلی","home",style="primary")]])
+def storefront_kb(products=None):
+    """صفحه اول خرید: پلتفرم‌ها در شبکه سه‌ستونه."""
+    products=list(products or [])
+    rows=[]
+    for i in range(0,len(products),3):
+        rows.append([btn(_platform_name(p),f"srv:{p}:0:economic",style=("primary" if i//3%2==0 else "success")) for p in products[i:i+3]])
+    return markup(rows+[_social_back("home",back_style="danger")])
 def _platform_name(p):
     e,t=texts.SERVICE_MAP.get(p,("🔹",p.replace("_"," ").replace("-"," "))); return f"{e} {t}"
 def product_kb(products,category="economic",page=0,pages=1):
     rows=[]
-    for i in range(0,len(products),2): rows.append([btn(_platform_name(p),f"srv:{p}:0:{category}",style=("danger" if i//2%2==0 else "success")) for p in products[i:i+2]])
+    for i in range(0,len(products),3): rows.append([btn(_platform_name(p),f"srv:{p}:0:{category}",style=("primary" if i//3%2==0 else "success")) for p in products[i:i+3]])
     nav=[]
     if page>0: nav.append(btn("⬅️ صفحه قبل",f"cat:{category}:{page-1}",style="primary"))
-    nav.append(btn(f"📄 {page+1}/{pages}","noop",style="primary"))
-    if page<pages-1: nav.append(btn("صفحه بعد ➡️",f"cat:{category}:{page+1}",style="primary"))
-    return markup(rows+[nav,_social_back("buy")])
+    if pages>1:
+        nav.append(btn(f"📄 {page+1}/{pages}","noop",style="primary"))
+        if page<pages-1: nav.append(btn("صفحه بعد ➡️",f"cat:{category}:{page+1}",style="primary"))
+    return markup(rows+([nav] if nav else [])+[_social_back("home",back_style="danger")])
 def countries_kb(product,items,page=0,pages=1):
-    # هر کشور یک ردیف: نام کشور (آبی) | قیمت (خنثی) | خرید (سبز)
     rows=[[btn(name,cb,style="primary"),btn(price,cb),btn("🛒 خرید",cb,style="success")] for name,price,cb in items]
     nav=[]
-    if page>0: nav.append(btn("⬅️ صفحه قبل",f"srv:{product}:{page-1}",style="primary"))
-    if page<pages-1: nav.append(btn("صفحه بعد ➡️",f"srv:{product}:{page+1}",style="primary"))
+    if page>0: nav.append(btn("⬅️ صفحه قبل",f"srv:{product}:{page-1}:economic",style="primary"))
+    if page<pages-1: nav.append(btn("صفحه بعد ➡️",f"srv:{product}:{page+1}:economic",style="primary"))
     return markup(rows+([nav] if nav else [])+[_social_back("buy",back_style="danger")])
 def operators_kb(product,country,items,page,pages): return markup([[btn(str(page*12+i+1),f"op:{product}:{country}:{page*12+i}",style=("danger" if i//2%2==0 else "success")) for i in range(min(4,len(items)))],_social_back("buy")])
 def confirm_kb(product,country,operator,enough):
@@ -55,17 +61,15 @@ def price_admin_kb(): return markup([[btn("💱 نرخ تبدیل","aset:rate",s
 def market_admin_kb(a,b): return admin_back("panel_price")
 def user_manage_kb(uid,banned): return markup([[btn("➕ افزایش موجودی",f"ubal:{uid}:add",style="success"),btn("➖ کسر موجودی",f"ubal:{uid}:sub",style="danger")],[btn("✅ رفع مسدودی" if banned else "🚫 مسدود کردن",f"uban:{uid}",style="danger")],[btn("🔍 جستجوی کاربر دیگر","adm_user",style="primary")],[btn("🔙 بازگشت به پنل","admin",style="primary")]])
 def broadcast_confirm_kb(): return markup([[btn("✅ ارسال برای همه","bc_send",style="success")],[btn("❌ انصراف","admin",style="danger")]])
-def sintel_main_menu(): return markup([[btn("🛒 انتخاب خدمات","sintel_telegram",style="success")],[btn("📦 سفارشات من","sintel_orders",style="primary")],[btn("🏠 منوی اصلی","home",style="primary")]])
+def sintel_main_menu(): return markup([[btn("🛒 انتخاب خدمات","sintel_telegram","style="success")],[btn("📦 سفارشات من","sintel_orders",style="primary")],[btn("🏠 منوی اصلی","home",style="primary")]])
 def sintel_platform_menu(p):
     from services.sintel_catalog import PLATFORM_LABELS
     e,t=PLATFORM_LABELS.get(p,("📱",p)); return markup([[btn(f"{e} {t}",f"stsc:{p}:all",style="danger")],_social_back("sintel")])
-# کیفیت خدمت از نام/توضیحات پنلیکس تشخیص داده می‌شود (فیلد جداگانه‌ای از پنل نمی‌آید)
 _QUALITY=(("⭐ پریمیوم",("premium","vip","پریمیوم","ویژه")),("💎 واقعی",("real","واقعی","ایرانی","iran")),("🔥 کیفیت بالا",("hq","high quality","کیفیت بالا","باکیفیت","با کیفیت")),("💰 اقتصادی",("cheap","ارزان","اقتصادی","فیک","fake")))
 def _quality(s):
     t=" ".join(str(s.get(k) or "") for k in ("display_name","name","description","provider_category")).lower()
     return next((label for label,keys in _QUALITY if any(k in t for k in keys)),"✨ استاندارد")
 def sintel_services_list(ss):
-    # هر خدمت یک ردیف: اسم (آبی) | کیفیت (خنثی) | حداقل (سبز)
     rows=[]
     for s in ss:
         cb=f"stlg:{s['service_id']}";name=(s.get('display_name') or s.get('name') or 'سرویس')[:28]
