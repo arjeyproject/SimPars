@@ -8,7 +8,7 @@ CHANNEL_URL="https://t.me/"+CHANNEL_USERNAME.lstrip("@"); OWNER_URL=f"https://t.
 def btn(text,callback=None,url=None,*,style=None,icon_custom_emoji_id=None): return InlineKeyboardButton(text=text,url=url,callback_data=None if url else (callback or "noop"),style=style,icon_custom_emoji_id=icon_custom_emoji_id)
 def markup(rows): return InlineKeyboardMarkup(inline_keyboard=rows)
 def onoff(value): return "✅ روشن" if value=="1" else "❌ خاموش"
-def _social_back(callback="sintel"): return [btn("🔙 بازگشت",callback,style="primary"),btn("🏠 منوی اصلی","home",style="primary")]
+def _social_back(callback="sintel",back_style="primary"): return [btn("🔙 بازگشت",callback,style=back_style),btn("🏠 منوی اصلی","home",style="primary")]
 def main_menu(is_admin=False):
     rows=[[btn("📱 خرید شماره مجازی","buy",style="success")],[btn("📣 خدمات شبکه‌های اجتماعی","sintel",style="success")],[btn("💰 کیف پول","wallet",style="primary"),btn("👤 حساب من","account",style="primary")],[btn("📦 سفارش‌های من","orders",style="primary"),btn("📦 سفارشات خدمات","sintel_orders",style="primary")],[btn("🎁 دعوت دوستان","referral",style="primary"),btn("💬 پشتیبانی","support",style="primary")],[btn("📚 راهنما","help",style="primary")],[btn("📢 کانال ما",url=CHANNEL_URL,style="danger"),btn("📸 اینستاگرام",url=INSTAGRAM_URL,style="danger")]]
     if is_admin: rows.append([btn("⚙️ پنل مدیریت","admin",style="primary")])
@@ -30,12 +30,12 @@ def product_kb(products,category="economic",page=0,pages=1):
     if page<pages-1: nav.append(btn("صفحه بعد ➡️",f"cat:{category}:{page+1}",style="primary"))
     return markup(rows+[nav,_social_back("buy")])
 def countries_kb(product,items,page=0,pages=1):
-    rows=[]
-    for i in range(0,len(items),2): rows.append([btn(f"{a}\n{c}",b,style=("danger" if i//2%2==0 else "success")) for a,c,b in items[i:i+2]])
+    # هر کشور یک ردیف: نام کشور (آبی) | قیمت (خنثی) | خرید (سبز)
+    rows=[[btn(name,cb,style="primary"),btn(price,cb),btn("🛒 خرید",cb,style="success")] for name,price,cb in items]
     nav=[]
     if page>0: nav.append(btn("⬅️ صفحه قبل",f"srv:{product}:{page-1}",style="primary"))
     if page<pages-1: nav.append(btn("صفحه بعد ➡️",f"srv:{product}:{page+1}",style="primary"))
-    return markup(rows+([nav] if nav else [])+[_social_back("buy")])
+    return markup(rows+([nav] if nav else [])+[_social_back("buy",back_style="danger")])
 def operators_kb(product,country,items,page,pages): return markup([[btn(str(page*12+i+1),f"op:{product}:{country}:{page*12+i}",style=("danger" if i//2%2==0 else "success")) for i in range(min(4,len(items)))],_social_back("buy")])
 def confirm_kb(product,country,operator,enough):
     rows=[[btn("✅ تأیید و خرید",f"ok:{product}:{country}:{operator}",style="success")]]
@@ -59,9 +59,17 @@ def sintel_main_menu(): return markup([[btn("🛒 انتخاب خدمات","sint
 def sintel_platform_menu(p):
     from services.sintel_catalog import PLATFORM_LABELS
     e,t=PLATFORM_LABELS.get(p,("📱",p)); return markup([[btn(f"{e} {t}",f"stsc:{p}:all",style="danger")],_social_back("sintel")])
+# کیفیت خدمت از نام/توضیحات پنلیکس تشخیص داده می‌شود (فیلد جداگانه‌ای از پنل نمی‌آید)
+_QUALITY=(("⭐ پریمیوم",("premium","vip","پریمیوم","ویژه")),("💎 واقعی",("real","واقعی","ایرانی","iran")),("🔥 کیفیت بالا",("hq","high quality","کیفیت بالا","باکیفیت","با کیفیت")),("💰 اقتصادی",("cheap","ارزان","اقتصادی","فیک","fake")))
+def _quality(s):
+    t=" ".join(str(s.get(k) or "") for k in ("display_name","name","description","provider_category")).lower()
+    return next((label for label,keys in _QUALITY if any(k in t for k in keys)),"✨ استاندارد")
 def sintel_services_list(ss):
-    items=[(f"{s.get('display_name') or s.get('name','سرویس')[:34]} | حداقل {s.get('min_quantity',0):,}",f"stlg:{s['service_id']}") for s in ss]; rows=[]
-    for i in range(0,len(items),2): rows.append([btn(label,callback,style=("danger" if i//2%2==0 else "success")) for label,callback in items[i:i+2]])
+    # هر خدمت یک ردیف: اسم (آبی) | کیفیت (خنثی) | حداقل (سبز)
+    rows=[]
+    for s in ss:
+        cb=f"stlg:{s['service_id']}";name=(s.get('display_name') or s.get('name') or 'سرویس')[:28]
+        rows.append([btn(name,cb,style="primary"),btn(_quality(s),cb),btn(f"حداقل {int(s.get('min_quantity') or 0):,}",cb,style="success")])
     return markup(rows+[_social_back("sintel")])
 def sintel_confirm_kb(ok):
     rows=[[btn("✅ تأیید سفارش","sintel_buy",style="success")] if ok else [btn("💳 شارژ کیف پول","sintel_wallet",style="success")]]
