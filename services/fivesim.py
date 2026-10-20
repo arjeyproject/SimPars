@@ -3,12 +3,12 @@ from __future__ import annotations
 import asyncio,json,time
 from urllib.parse import quote
 import aiohttp
+import texts
 API_BASE="https://5sim.net/v1"; _TIMEOUT=aiohttp.ClientTimeout(total=25); PRICE_CACHE_TTL=60; COUNTRY_CACHE_TTL=21600
 _price_cache={}; _options_cache={}; _all_prices_cache=None; _country_cache={"time":0.0,"data":{}}; _quality_cache={}
 _last_refresh={"time":0.0,"products":0,"countries":0}
 class FiveSimError(Exception): pass
-class PurchaseUnknownError(FiveSimError):
-    """The provider may have created an activation but the response was lost."""
+class PurchaseUnknownError(FiveSimError): pass
 ERROR_MESSAGES={"unauthorized":"🔑 اتصال سرویس فروش تنظیم نشده یا کلید آن نامعتبر است.","no free phones":"😕 شماره‌ای برای این کشور موجود نیست.","not enough user balance":"⚠️ موجودی تامین‌کننده موقتاً کافی نیست.","not enough rating":"⚠️ امکان خرید موقتاً وجود ندارد.","no product":"❌ این سرویس موجود نیست.","bad country":"❌ کشور نامعتبر است.","bad operator":"❌ اپراتور نامعتبر است.","server offline":"🔌 سرور تامین‌کننده موقتاً در دسترس نیست.","order not found":"↩️ سفارش دیگر وجود ندارد؛ مبلغ به کیف پول برمی‌گردد.","order expired":"↩️ سفارش منقضی شده؛ مبلغ برمی‌گردد.","banned":"🚫 سفارش مسدود شد؛ مبلغ به کیف پول برمی‌گردد.","ban":"🚫 سفارش مسدود شد؛ مبلغ به کیف پول برمی‌گردد.","network error":"🌐 خطا در اتصال به سرویس فروش."}
 def humanize(error):
     text=str(error).lower(); return next((v for k,v in ERROR_MESSAGES.items() if k in text),"⚠️ خطا در ارتباط با سرویس فروش.")
@@ -73,20 +73,26 @@ def _normalize_options(payload,product):
         if values:result[str(country)]=values
     return result
 def _normalize_all(payload):
+    """Normalize both 5SIM response shapes into product -> country -> best option."""
     result={}
-    if not isinstance(payload,dict):return result
-    # 5Sim normally returns product -> country -> operator. Accept the older
-    # country -> product -> operator shape too, so refresh never empties cache.
+    if not isinstance(payload,dict): return result
+    supported=set(texts.SERVICE_MAP)
+    def key(value): return str(value or "").strip().lower().replace("-","_").replace(" ","_")
     for first,second in payload.items():
-        if not isinstance(second,dict):continue
-        if any(isinstance(v,dict) and any(isinstance(x,dict) and "cost" in x for x in v.values()) for v in second.values()):
+        if not isinstance(second,dict): continue
+        first_key=key(first)
+        # Standard shape: product -> country -> operator -> details.
+        if first_key in supported:
             for country,operators in second.items():
-                best=_best(operators,country,first)
-                if best:result.setdefault(str(first),{})[str(country)]=best
-        else:
-            for product,operators in second.items():
-                best=_best(operators,first,product)
-                if best:result.setdefault(str(product),{})[str(first)]=best
+                best=_best(operators,country,first_key)
+                if best: result.setdefault(first_key,{})[str(country)]=best
+            continue
+        # Legacy/reversed shape: country -> product -> operator -> details.
+        for product,operators in second.items():
+            product_key=key(product)
+            if product_key not in supported: continue
+            best=_best(operators,first,product_key)
+            if best: result.setdefault(product_key,{})[str(first)]=best
     return result
 async def get_all_prices(use_cache=True):
     global _all_prices_cache; now=time.time()
@@ -112,12 +118,8 @@ async def refresh_all():
     if not isinstance(payload,dict) or not payload:raise FiveSimError("empty prices response")
     now=time.time(); all_best=_normalize_all(payload)
     for product,best in all_best.items():
-        _price_cache[product]=(now,best)
-        raw_options=_payload(payload,product)
-        _options_cache[product]=(now,_normalize_options(raw_options,product))
-    _all_prices_cache=(now,all_best); _country_cache["time"]=0.0; await countries_safe()
-    _last_refresh.update(time=now,products=len(all_best),countries=len({c for p in all_best.values() for c in p}))
-    return dict(_last_refresh)
+        _price_cache[product]=(now,best); raw_options=_payload(payload,product); _options_cache[product]=(now,_normalize_options(raw_options,product))
+    _all_prices_cache=(now,all_best); _country_cache["time"]=0.0; await countries_safe(); _last_refresh.update(time=now,products=len(all_best),countries=len({c for p in all_best.values() for c in p})); return dict(_last_refresh)
 async def get_countries():
     now=time.time()
     if _country_cache["data"] and now-_country_cache["time"]<COUNTRY_CACHE_TTL:return _country_cache["data"]
@@ -143,7 +145,3 @@ class FiveSimClient:
         if not isinstance(data,dict) or not data.get("id") or not data.get("phone"):raise FiveSimError(_message(data,"invalid purchase response"))
         if str(data.get("operator") or selected).strip().lower()!=selected.lower():raise FiveSimError("invalid purchase response: operator changed")
         return data
-    async def check(self,order_id):return await _request(f"/user/check/{order_id}",self.token)
-    async def cancel(self,order_id):return await _request(f"/user/cancel/{order_id}",self.token)
-    async def finish(self,order_id):return await _request(f"/user/finish/{order_id}",self.token)
-    async def ban(self,order_id):return await _request(f"/user/ban/{order_id}",self.token)
