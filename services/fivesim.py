@@ -4,6 +4,7 @@ import asyncio,json,time
 import aiohttp
 API_BASE="https://5sim.net/v1"; _TIMEOUT=aiohttp.ClientTimeout(total=25); PRICE_CACHE_TTL=60; COUNTRY_CACHE_TTL=21600
 _price_cache={}; _options_cache={}; _all_prices_cache=None; _country_cache={"time":0.0,"data":{}}; _quality_cache={}
+_last_refresh={"time":0.0,"products":0,"countries":0}
 class FiveSimError(Exception): pass
 class PurchaseUnknownError(FiveSimError):
     """The provider may have created an activation but the response was lost."""
@@ -39,17 +40,19 @@ def _options(operators,country=None,product=None):
         if not isinstance(info,dict):continue
         cost=_number(info.get("cost")); count=int(_number(info.get("count")))
         if cost<=0 or count<=0:continue
-        quality=max(_number(info.get(k),-1) for k in ("quality","rating","success_rate","successRate","delivery_rate","success"))
+        # 5Sim نرخ موفقیت اپراتور را در فیلد rate (درصد) می‌فرستد
+        quality=max(_number(info.get(k),-1) for k in ("rate","quality","rating","success_rate","successRate","delivery_rate","success"))
         if quality<0:quality=0.0
         if quality>1:quality=min(100.0,quality)/100.0
         _quality_cache[(str(country or ""),str(product or ""),str(operator))]=quality; result.append((str(operator),cost,count))
     return sorted(result,key=lambda x:x[1],reverse=True)
 def choose_operator(values,country="",product="",preferred=()):
+    """بهترین اپراتور: اول بالاترین کیفیت (نرخ موفقیت)، بعد گران‌ترین قیمت."""
     if not values:return None
     preferred={str(x).strip().lower() for x in preferred if str(x).strip()}
     def key(item):
-        op,cost,count=item; quality=_quality_cache.get((str(country),str(product),str(op)),0.0); pref=1 if op.lower() in preferred else 0
-        return (quality,pref,count,-cost)
+        op,cost,count=item; quality=round(_quality_cache.get((str(country),str(product),str(op)),0.0),2); pref=1 if op.lower() in preferred else 0
+        return (quality,cost,pref,count)
     return max(values,key=key)
 def _best(operators,country=None,product=None,preferred=()):return choose_operator(_options(operators,country,product),country,product,preferred)
 def _payload(payload,product):return payload.get(product) if isinstance(payload,dict) and isinstance(payload.get(product),dict) else payload
@@ -88,6 +91,23 @@ async def get_product_options(product,use_cache=True):
     now=time.time(); cached=_options_cache.get(product)
     if use_cache and cached and now-cached[0]<PRICE_CACHE_TTL:return cached[1]
     result=_normalize_options(await _request("/guest/prices",params={"product":product}),product); _options_cache[product]=(now,result); return result
+async def refresh_all():
+    """دریافت واقعی همه قیمت‌ها و کشورها از 5Sim و جایگزینی کش‌ها."""
+    global _all_prices_cache
+    payload=await _request("/guest/prices")
+    if not isinstance(payload,dict) or not payload:raise FiveSimError("empty prices response")
+    now=time.time(); by_product={}
+    for country,products in payload.items():
+        if not isinstance(products,dict):continue
+        for product,operators in products.items():by_product.setdefault(str(product),{})[str(country)]=operators
+    all_best={}
+    for product,countries in by_product.items():
+        _options_cache[product]=(now,_normalize_options(countries,product)); best=_normalize(countries,product); _price_cache[product]=(now,best)
+        if best:all_best[product]=best
+    _all_prices_cache=(now,all_best)
+    _country_cache["time"]=0.0; await countries_safe()
+    _last_refresh.update(time=now,products=len(all_best),countries=len({c for p in all_best.values() for c in p}))
+    return dict(_last_refresh)
 async def get_countries():
     now=time.time()
     if _country_cache["data"] and now-_country_cache["time"]<COUNTRY_CACHE_TTL:return _country_cache["data"]
