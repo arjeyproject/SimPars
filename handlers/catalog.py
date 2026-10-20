@@ -34,16 +34,21 @@ async def live_buy_menu(call: CallbackQuery):
     try: catalog = await fivesim.get_all_prices()
     except FiveSimError as exc: await call.message.edit_text(humanize(exc), reply_markup=kb.back_main()); return
     if not catalog: await call.message.edit_text(texts.NO_NUMBERS, reply_markup=kb.back_main()); return
-    products=_products(catalog,"economic")
-    pages=max(1,(len(products)+PRODUCT_PAGE_SIZE-1)//PRODUCT_PAGE_SIZE)
-    await call.message.edit_text("🛍 <b>خرید شماره مجازی</b>\n\nپلتفرم را انتخاب کن:", reply_markup=kb.product_kb(products[:PRODUCT_PAGE_SIZE],"economic",0,pages))
+    products = _products(catalog, "economic")
+    pages = max(1, (len(products) + PRODUCT_PAGE_SIZE - 1) // PRODUCT_PAGE_SIZE)
+    chunk = products[:PRODUCT_PAGE_SIZE]
+    await call.message.edit_text("🛍 <b>خرید شماره مجازی</b>\n\nپلتفرم را انتخاب کن:", reply_markup=kb.product_kb(chunk, "economic", 0, pages))
 
 @router.callback_query(F.data.startswith("cat:"))
 async def catalog_category(call: CallbackQuery):
-    parts=call.data.split(":")
-    category=parts[1] if len(parts)>1 else "economic"
-    page=int(parts[2]) if len(parts)>2 and parts[2].isdigit() else 0
-    try: catalog=await fivesim.get_all_prices()
-    except FiveSimError as exc: await call.message.edit_text(humanize(exc),reply_markup=kb.back_main());return
-    products=_products(catalog,category);pages=max(1,(len(products)+PRODUCT_PAGE_SIZE-1)//PRODUCT_PAGE_SIZE);page=min(max(0,page),pages-1);chunk=products[page*PRODUCT_PAGE_SIZE:(page+1)*PRODUCT_PAGE_SIZE)
-    await call.message.edit_text("🛍 <b>خرید شماره مجازی</b>\n\nپلتفرم را انتخاب کن:",reply_markup=kb.product_kb(chunk,category,page,pages))
+    parts = call.data.split(":")
+    category = parts[1] if len(parts) > 1 else "economic"
+    page = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0
+    try: catalog = await fivesim.get_all_prices()
+    except FiveSimError as exc:
+        await call.message.edit_text(humanize(exc), reply_markup=kb.back_main()); return
+    products = _products(catalog, category)
+    pages = max(1, (len(products) + PRODUCT_PAGE_SIZE - 1) // PRODUCT_PAGE_SIZE)
+    page = min(max(0, page), pages - 1)
+    chunk = products[page * PRODUCT_PAGE_SIZE:(page + 1) * PRODUCT_PAGE_SIZE]
+    await call.message.edit_text("🛍 <b>خرید شماره مجازی</b>\n\nپلتفرم را انتخاب کن:", reply_markup=kb.product_kb(chunk, category, page, pages))
