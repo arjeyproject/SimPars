@@ -13,7 +13,7 @@ from services import coupons, fivesim, zarinpal
 from services.fivesim import FiveSimClient, FiveSimError, PurchaseUnknownError, humanize
 from services.market import sales_allowed
 from services.purchase_checkout import create_invoice, resolve, reserve_order, complete_reserved_order, refund_reserved_order
-from utils import esc, phone_ltr, safe_edit, service_title
+from utils import country_title, esc, phone_ltr, safe_edit, service_title
 router=Router(); log=logging.getLogger(__name__)
 class CouponStates(StatesGroup): code=State(); create=State(); delete=State()
 def _is_admin(uid:int)->bool:return uid in ADMIN_IDS
@@ -25,7 +25,8 @@ def _checkout_kb(can_wallet:bool,can_pay:bool=True):
 async def _show(call:CallbackQuery,payload:dict,notice:str=""):
     price,operator,code=await resolve(payload); payload["operator"]=operator
     user=await db.get_user(call.from_user.id); balance=int(user["balance"] if user else 0); coupon_text=f"\n🎁 تخفیف: <b>{esc(code)}</b>" if code else ""
-    text=f"🧾 <b>پیش‌فاکتور خرید شماره</b>\n\n📲 سرویس: <b>{esc(service_title(payload['product']))}</b>\n🌍 کشور: <b>{esc(payload['country'])}</b>\n💰 مبلغ نهایی: <b>{price:,} تومان</b>{coupon_text}\n👛 موجودی کیف پول: <b>{balance:,} تومان</b>\n\n{notice or 'روش پرداخت را انتخاب کن.'}"
+    countries=await fivesim.countries_safe(); country=country_title(payload["country"],countries)
+    text=f"🧾 <b>پیش‌فاکتور خرید شماره</b>\n\n📲 سرویس: <b>{esc(service_title(payload['product']))}</b>\n🌍 کشور: <b>{esc(country)}</b>\n💰 مبلغ نهایی: <b>{price:,} تومان</b>{coupon_text}\n👛 موجودی کیف پول: <b>{balance:,} تومان</b>\n\n{notice or 'روش پرداخت را انتخاب کن.'}"
     await safe_edit(call,text,_checkout_kb(balance>=price,True))
 @router.callback_query(F.data.startswith("ok:"))
 async def purchase_preview(call:CallbackQuery,state:FSMContext):
@@ -67,13 +68,10 @@ async def pay_wallet(call:CallbackQuery,state:FSMContext):
         else:await call.answer("موجودی کافی نیست.",show_alert=True)
         return
     client=FiveSimClient(await db.get_setting("fivesim_api"))
-    try:
-        data=await client.buy(payload["country"],operator,payload["product"])
+    try:data=await client.buy(payload["country"],operator,payload["product"])
     except PurchaseUnknownError:
         log.error("ambiguous wallet purchase user=%s local_order=%s",call.from_user.id,order_id); await call.answer("⚠️ پاسخ سرویس نامشخص است؛ خرید دوباره انجام نده و با پشتیبانی تماس بگیر.",show_alert=True); return
     except FiveSimError as exc:
-        # موجودی 5Sim لحظه‌ای است. اگر اپراتور انتخاب‌شده همین الان خالی شد،
-        # یک‌بار قیمت‌ها را از نو می‌گیریم و با بهترین اپراتور موجود امتحان می‌کنیم.
         if "no free phones" in str(exc).lower():
             try:
                 fresh={**payload,"operator":""}; fresh_price,fresh_operator,_=await resolve(fresh)
@@ -92,7 +90,7 @@ async def pay_wallet(call:CallbackQuery,state:FSMContext):
     if payload.get("coupon"):
         try:await coupons.consume(payload["coupon"])
         except Exception:log.warning("coupon consume failed")
-    await state.clear(); phone=str(data.get("phone") or ""); await call.answer("✅ شماره رزرو شد"); await safe_edit(call,texts.ORDER_CREATED.format(order_id=order_id,service=service_title(payload["product"]),country=esc(payload["country"]),phone=phone_ltr(phone),price=price,minutes=ORDER_LIFETIME//60),kb.order_kb(order_id))
+    await state.clear(); phone=str(data.get("phone") or ""); countries=await fivesim.countries_safe(); country=country_title(payload["country"],countries); await call.answer("✅ شماره رزرو شد"); await safe_edit(call,texts.ORDER_CREATED.format(order_id=order_id,service=service_title(payload["product"]),country=esc(country),phone=phone_ltr(phone),price=price,minutes=ORDER_LIFETIME//60),kb.order_kb(order_id))
 @router.callback_query(F.data=="coupon_admin")
 async def coupon_admin(call:CallbackQuery):
     if not _is_admin(call.from_user.id):return
