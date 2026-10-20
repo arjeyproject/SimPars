@@ -5,7 +5,7 @@ from aiogram import Bot
 import database as db
 import texts
 from config import ORDER_LIFETIME
-from services import coupons, fivesim, zarinpal
+from services import availability, coupons, fivesim, zarinpal
 from services.fivesim import FiveSimClient, FiveSimError, PurchaseUnknownError
 from utils import calc_price, country_title, esc, phone_ltr, service_title
 log=logging.getLogger(__name__); _table_ready=False
@@ -26,7 +26,10 @@ async def get_context(track_id:str):
 async def _pricing()->tuple[float,float]:return await db.get_float("rate",1000),max(0.0,await db.get_float("profit_percent",30))
 
 async def resolve(payload:dict)->tuple[int,str,str]:
-    options=await fivesim.get_product_options(payload["product"],use_cache=False); values=options.get(payload["country"],[])
+    # availability.country_options tolerates key casing/spacing and falls back
+    # through cache -> fresh fetch -> full catalog, so a stocked country is
+    # never mistaken for "no free phones".
+    values=await availability.country_options(payload["product"],payload["country"])
     if not values:raise FiveSimError("no free phones")
     selected=str(payload.get("operator") or "").strip()
     match=next((item for item in values if item[0].lower()==selected.lower()),None)
@@ -41,7 +44,7 @@ async def resolve(payload:dict)->tuple[int,str,str]:
 async def create_invoice(user_id:int,payload:dict)->tuple[str,int]:
     from services.payments import get_callback_url,get_merchant
     price,operator,code=await resolve(payload); merchant=await get_merchant()
-    if not merchant:raise zarinpal.ZarinpalError("درگاه زرین‌پال تنظیم نشده است")
+    if not merchant:raise zarinpal.ZarinpalError("درگاه زرین‌پال تنطیم نشده است")
     user=await db.get_user(user_id); mobile=user["contact_phone"] if user and "contact_phone" in user.keys() else None
     authority=await zarinpal.create_payment(merchant,price*10,await get_callback_url(),description=f"خرید شماره {payload['product']} - کاربر {user_id}",order_id=f"buy-{user_id}-{int(time.time())}",mobile=mobile)
     stored={**payload,"operator":operator,"coupon":code,"price":price}; await _ensure_context_table()
