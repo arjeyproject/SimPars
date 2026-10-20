@@ -23,13 +23,10 @@ def _checkout_kb(can_wallet:bool,can_pay:bool=True):
     if can_pay:rows.append([kb.btn("💳 پرداخت مستقیم همین مبلغ","purchase_pay",style="success")])
     rows.append([kb.btn("🎁 اعمال کد تخفیف","purchase_coupon",style="primary")]); rows.append([kb.btn("🏠 منوی اصلی","home",style="primary")]); return kb.markup(rows)
 async def _show(call:CallbackQuery,payload:dict,notice:str=""):
-    price,operator,code=await resolve(payload); payload["operator"]=operator; await state_update(call,payload)
+    price,operator,code=await resolve(payload); payload["operator"]=operator
     user=await db.get_user(call.from_user.id); balance=int(user["balance"] if user else 0); coupon_text=f"\n🎁 تخفیف: <b>{esc(code)}</b>" if code else ""
     text=f"🧾 <b>پیش‌فاکتور خرید شماره</b>\n\n📲 سرویس: <b>{esc(service_title(payload['product']))}</b>\n🌍 کشور: <b>{esc(payload['country'])}</b>\n💰 مبلغ نهایی: <b>{price:,} تومان</b>{coupon_text}\n👛 موجودی کیف پول: <b>{balance:,} تومان</b>\n\n{notice or 'روش پرداخت را انتخاب کن.'}"
     await safe_edit(call,text,_checkout_kb(balance>=price,True))
-async def state_update(call,payload):
-    # The preview handler owns the FSM; this small hook keeps _show pure for retries.
-    return None
 @router.callback_query(F.data.startswith("ok:"))
 async def purchase_preview(call:CallbackQuery,state:FSMContext):
     try:_,product,country,operator=call.data.split(":",3)
@@ -69,11 +66,27 @@ async def pay_wallet(call:CallbackQuery,state:FSMContext):
         if order_id:await call.answer("⏳ این خرید قبلاً شروع شده؛ خرید دوباره انجام نده.",show_alert=True)
         else:await call.answer("موجودی کافی نیست.",show_alert=True)
         return
-    try:data=await FiveSimClient(await db.get_setting("fivesim_api")).buy(payload["country"],operator,payload["product"])
+    client=FiveSimClient(await db.get_setting("fivesim_api"))
+    try:
+        data=await client.buy(payload["country"],operator,payload["product"])
     except PurchaseUnknownError:
         log.error("ambiguous wallet purchase user=%s local_order=%s",call.from_user.id,order_id); await call.answer("⚠️ پاسخ سرویس نامشخص است؛ خرید دوباره انجام نده و با پشتیبانی تماس بگیر.",show_alert=True); return
     except FiveSimError as exc:
-        await refund_reserved_order(order_id); await call.answer(humanize(exc),show_alert=True); return
+        # موجودی 5Sim لحظه‌ای است. اگر اپراتور انتخاب‌شده همین الان خالی شد،
+        # یک‌بار قیمت‌ها را از نو می‌گیریم و با بهترین اپراتور موجود امتحان می‌کنیم.
+        if "no free phones" in str(exc).lower():
+            try:
+                fresh={**payload,"operator":""}; fresh_price,fresh_operator,_=await resolve(fresh)
+                if fresh_operator and fresh_operator.lower()!=operator.lower() and fresh_price<=price:
+                    data=await client.buy(fresh["country"],fresh_operator,fresh["product"]); operator=fresh_operator; payload["operator"]=operator
+                else:
+                    await refund_reserved_order(order_id); await call.answer(humanize(exc),show_alert=True); return
+            except PurchaseUnknownError:
+                log.error("ambiguous retry wallet purchase user=%s local_order=%s",call.from_user.id,order_id); await call.answer("⚠️ پاسخ سرویس نامشخص است؛ خرید دوباره انجام نده و با پشتیبانی تماس بگیر.",show_alert=True); return
+            except FiveSimError:
+                await refund_reserved_order(order_id); await call.answer(humanize(exc),show_alert=True); return
+        else:
+            await refund_reserved_order(order_id); await call.answer(humanize(exc),show_alert=True); return
     if not await complete_reserved_order(order_id,data,operator):
         await call.answer("⚠️ شماره ایجاد شد اما ثبت سفارش نیازمند بررسی است؛ خرید دوباره انجام نده.",show_alert=True); return
     if payload.get("coupon"):
