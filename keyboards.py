@@ -21,7 +21,7 @@ def cancel_kb(c="home"): return markup([[btn("انصراف",c,style="primary")]]
 def join_kb(): return markup([[btn("📢 عضویت در کانال سیم‌پارس",url=CHANNEL_URL,style="primary")],[btn("✅ عضو شدم","joined",style="success")]])
 def services_kb(): return platforms_kb([x[0] for x in texts.SERVICES])
 def _platform_name(p):
-    code=str(p or "").strip().lower(); emoji,title=texts.SERVICE_MAP.get(code,(None,code.replace("_"," ").replace("-"," ").title())); return f"{PLATFORM_EMOJI.get(code) or emoji or '🔸'} {title}"
+    code=str(p or "").strip().lower(); emoji,title=texts.SERVICE_MAP.get(code,(None,code.replace("_"," ").replace("-"," ").title())); title=getattr(texts,"SERVICE_FA",{}).get(code) or title; return f"{PLATFORM_EMOJI.get(code) or emoji or '🔸'} {title}"
 def _platform_grid(products,category):
     products=list(products or []); rows=[]
     for i in range(0,len(products),3): rows.append([btn(_platform_name(p),f"srv:{p}:0:{category}",style=COLUMN_STYLES[col]) for col,p in enumerate(products[i:i+3])])
@@ -76,8 +76,7 @@ def sintel_services_list(ss):
         cb=f"stlg:{s['service_id']}"; name=(s.get('display_name') or s.get('name') or 'سرویس')[:28]; rows.append([btn(name,cb,style=COLUMN_STYLES[0]),btn(_quality(s),cb,style=COLUMN_STYLES[1]),btn(f"حداقل {int(s.get('min_quantity') or 0):,}",cb,style=COLUMN_STYLES[2])])
     return markup(rows+[_social_back("sintel")])
 def sintel_confirm_kb(ok):
-    rows=([btn("✅ تأیید سفارش","sintel_buy",style="success")] if ok else [btn("💳 شارژ کیف پول","sintel_wallet",style="success")])
-    return markup([rows]+[_social_back("sintel")])
+    rows=([btn("✅ تأیید سفارش","sintel_buy",style="success")] if ok else [btn("💳 شارژ کیف پول","sintel_wallet",style="success")]); return markup([rows]+[_social_back("sintel")])
 def sintel_orders_kb(): return markup([[btn("🛒 خرید سرویس جدید","sintel",style="success")],[btn("🏠 منوی اصلی","home",style="primary")]])
 def sintel_order_detail_kb(i,s): return markup([[btn("🔄 بروزرسانی وضعیت",f"stch:{i}",style="primary")],_social_back("sintel_orders")])
 def sintel_admin_menu(s): return markup([[btn("🔑 تنظیم کلید API","sintel_set_api",style="primary")],[btn("🔌 بررسی اتصال پنلیکس","sintel_test_connection",style="primary")],[btn("📥 دریافت آخرین سرویس‌ها","sintel_sync_catalog",style="success")],[btn("🔄 بروزرسانی قیمت‌ها","panelix_prices",style="success")],[btn("📊 وضعیت همگام‌سازی","panelix_status",style="primary")],[btn("💰 تنظیم سود و قیمت فروش","panelix_set:panelix_profit_percent",style="primary")],[btn("💱 تنظیم واحد نرخ","panelix_set:panelix_rate_unit",style="primary"),btn("💵 تنظیم ارز","panelix_set:panelix_currency",style="primary")],[btn("⏱ تنظیم فاصله بروزرسانی","panelix_set:panelix_sync_interval",style="primary")],[btn("📋 گزارش خطاها","panelix_status",style="primary")],[btn("🔙 بازگشت به مدیریت پنلیکس","admin",style="primary")]])
