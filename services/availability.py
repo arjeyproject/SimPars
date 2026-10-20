@@ -1,63 +1,45 @@
-"""Resilient 5SIM availability lookups.
-
-Country and product keys reach us from several endpoint shapes (filtered by
-product, unfiltered, cached snapshot) with inconsistent casing and separators.
-A plain ``dict.get(country)`` therefore used to answer "no numbers for this
-country" while stock was actually available. Everything here normalises keys
-and falls back through cache -> fresh fetch -> full catalog before admitting
-that a country is really sold out.
-"""
+"""Resilient 5SIM availability lookups."""
 from __future__ import annotations
 import logging, time
 from services import fivesim
 from services.fivesim import FiveSimError
-
 log = logging.getLogger(__name__)
-
-
-def norm(value) -> str:
-    """Comparable key: lowercase, alphanumeric only (``Hong Kong`` == ``hongkong``)."""
-    return "".join(ch for ch in str(value or "").strip().lower() if ch.isalnum())
-
-
+def norm(value) -> str: return "".join(ch for ch in str(value or "").strip().lower() if ch.isalnum())
 def pick(mapping, key):
-    """Fetch ``key`` from ``mapping`` tolerating case, spaces and separators."""
     if not isinstance(mapping, dict) or not mapping: return None
     for candidate in (key, str(key).strip(), str(key).strip().lower()):
         value = mapping.get(candidate)
         if value: return value
     target = norm(key)
-    if not target: return None
-    return next((value for name, value in mapping.items() if norm(name) == target and value), None)
-
-
+    return next((value for name, value in mapping.items() if norm(name) == target and value), None) if target else None
 async def _options(product, use_cache):
     try: return await fivesim.get_product_options(product, use_cache=use_cache)
     except FiveSimError as exc:
         log.debug("options lookup failed product=%s cache=%s: %s", product, use_cache, exc); return {}
-
-
 async def country_options(product, country):
-    """Every usable operator for one country. Empty only when truly sold out."""
+    """Return usable operators, falling back to the validated price catalog."""
     for use_cache in (True, False):
         values = pick(await _options(product, use_cache), country)
         if values: return list(values)
-    # The per-product endpoint occasionally answers empty or with the older
-    # country -> product shape; the unfiltered catalog still holds real stock.
     try: raw = await fivesim._request("/guest/prices")
-    except FiveSimError as exc:
-        log.debug("catalog fallback failed product=%s: %s", product, exc); raw = None
+    except FiveSimError as exc: log.debug("catalog fallback failed: %s", exc); raw = None
     if raw:
         fresh = fivesim._normalize_options(raw, product)
         if fresh:
             fivesim._options_cache[product] = (time.time(), fresh)
             values = pick(fresh, country)
             if values: return list(values)
+    # The price catalog has already validated operator, cost, and stock. Use it
+    # as the final read-only fallback when the options response shape differs.
+    try:
+        prices = await fivesim.get_product_prices(product, use_cache=False)
+        best = pick(prices, country)
+        if isinstance(best, (tuple, list)) and len(best) >= 3 and best[2] > 0:
+            return [(str(best[0]), float(best[1]), int(best[2]))]
+    except FiveSimError as exc: log.debug("price fallback failed: %s", exc)
     cached = fivesim._options_cache.get(product)
     values = pick(cached[1], country) if cached else None
     return list(values or [])
-
-
 async def product_countries(product):
     """country -> (operator, cost, count) for a product, with catalog fallback."""
     last_error = None
