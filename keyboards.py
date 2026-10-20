@@ -5,8 +5,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 import texts
 from config import CHANNEL_USERNAME, INSTAGRAM_ID, OWNER_USERNAME
 CHANNEL_URL="https://t.me/"+CHANNEL_USERNAME.lstrip("@"); OWNER_URL=f"https://t.me/{OWNER_USERNAME.lstrip('@')}"; INSTAGRAM_URL=f"https://instagram.com/{INSTAGRAM_ID.lstrip('@')}"
-COLUMN_STYLES=("primary","success","danger")
-COUNTRY_COLUMN_MARKERS=("🟩","🟦","🟧")
+COLUMN_STYLES=("primary","success","danger"); COUNTRY_COLUMN_MARKERS=("🟩","🟦","🟧")
 PLATFORM_EMOJI={"telegram":"✈️","instagram":"🌸","whatsapp":"💚","openai":"🤖","google":"🔎","facebook":"📘","twitter":"🐦","tiktok":"🎵","discord":"🎮","microsoft":"🪟","amazon":"📦","snapchat":"👻","viber":"🪻","signal":"🛡","linkedin":"💼","yahoo":"📨","netflix":"🎬","paypal":"💳","steam":"🕹","imo":"🗨","line":"🫧","wechat":"🧧","uber":"🚕","apple":"🍏","yandex":"🟥","binance":"🪙","ebay":"🛍","airbnb":"🏠","spotify":"🎧","twitch":"🟪","mailru":"📬","proton":"🔐","bolt":"⚡️","revolut":"🏦","tinder":"🔥","bumble":"🐝","nike":"👟","other":"🌐"}
 def btn(text,callback=None,url=None,*,style=None,icon_custom_emoji_id=None): return InlineKeyboardButton(text=text,url=url,callback_data=None if url else (callback or "noop"),style=style,icon_custom_emoji_id=icon_custom_emoji_id)
 def markup(rows): return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -22,8 +21,7 @@ def cancel_kb(c="home"): return markup([[btn("انصراف",c,style="primary")]]
 def join_kb(): return markup([[btn("📢 عضویت در کانال سیم‌پارس",url=CHANNEL_URL,style="primary")],[btn("✅ عضو شدم","joined",style="success")]])
 def services_kb(): return platforms_kb([x[0] for x in texts.SERVICES])
 def _platform_name(p):
-    code=str(p or "").strip().lower(); emoji,title=texts.SERVICE_MAP.get(code,(None,code.replace("_"," ").replace("-"," ").title()))
-    return f"{PLATFORM_EMOJI.get(code) or emoji or '🔸'} {title}"
+    code=str(p or "").strip().lower(); emoji,title=texts.SERVICE_MAP.get(code,(None,code.replace("_"," ").replace("-"," ").title())); return f"{PLATFORM_EMOJI.get(code) or emoji or '🔸'} {title}"
 def _platform_grid(products,category):
     products=list(products or []); rows=[]
     for i in range(0,len(products),3): rows.append([btn(_platform_name(p),f"srv:{p}:0:{category}",style=COLUMN_STYLES[col]) for col,p in enumerate(products[i:i+3])])
@@ -39,8 +37,7 @@ def storefront_kb(products=None): return platforms_kb(products)
 def product_kb(products,category="economic",page=0,pages=1): return platforms_kb(products,category,page,pages)
 def countries_kb(product,items,page=0,pages=1):
     rows=[]
-    for name,price,cb in items:
-        rows.append([btn(f"{COUNTRY_COLUMN_MARKERS[0]} {name}",cb,style="primary"),btn(f"{COUNTRY_COLUMN_MARKERS[1]} {price}",cb,style="success"),btn(f"{COUNTRY_COLUMN_MARKERS[2]} خرید",cb,style="danger")])
+    for name,price,cb in items: rows.append([btn(f"🟩 {name}",cb,style="primary"),btn(f"🟦 {price}",cb,style="success"),btn(f"🟧 خرید",cb,style="danger")])
     nav=[]
     if page>0: nav.append(btn("⬅️ صفحه قبل",f"srv:{product}:{page-1}:economic",style="primary"))
     if pages>1:
@@ -58,24 +55,31 @@ def wallet_kb(): return markup([[btn("💵 ۵۰٬۰۰۰ تومان","dep:50000",
 def payment_kb(url,i): return markup([[btn("💳 پرداخت آنلاین",url=url,style="success")],[btn("✅ پرداخت کردم، بررسی شود",f"vfy:{i}",style="success")],[btn("🏠 منوی اصلی","home",style="primary")]])
 def support_kb(): return markup([[btn("💬 ارتباط با پشتیبانی",url=OWNER_URL,style="primary")],[btn("📢 کانال",url=CHANNEL_URL,style="success"),btn("📸 اینستاگرام",url=INSTAGRAM_URL,style="success")],[btn("🏠 منوی اصلی","home",style="primary")]])
 def referral_kb(link): return markup([[btn("📤 اشتراک‌گذاری لینک",url=f"https://t.me/share/url?url={quote(link)}&text={quote('با سیم‌پارس شماره مجازی بگیر!')}",style="success")],[btn("🏠 منوی اصلی","home",style="primary")]])
+def admin_menu(f,m): return markup([[btn("📊 آمار و گزارشات","adm_stats",style="primary")],[btn("⚙️ مدیریت پنلیکس","panel_sintel",style="success")],[btn("🔑 تنظیمات شماره مجازی","panel_5sim",style="primary"),btn("💳 درگاه زرین‌پال","panel_zibal",style="primary")],[btn("💹 قیمت‌گذاری و مالی","panel_price",style="primary"),btn("👥 مدیریت کاربران","adm_user",style="primary")],[btn("📢 پیام همگانی","adm_bc",style="primary")],[btn(f"🔒 جوین اجباری: {onoff(f)}","atog:force_join",style="primary")],[btn("📢 کانال قفل اجباری","channel_admin",style="primary")],[btn(f"🛠 حالت تعمیرات: {onoff(m)}","atog:maintenance",style="danger")],[btn("🏠 منوی اصلی ربات","home",style="primary")]])
+def admin_back(c="admin"): return markup([[btn("🔙 بازگشت به پنل",c,style="primary")]])
+def zibal_admin_kb(sandbox,has): return markup([[btn("✏️ ثبت / تغییر مرچنت","aset:zibal_merchant",style="primary")],[btn(f"🧪 حالت تست: {onoff(sandbox)}","atog:zibal_sandbox",style="primary")],[btn("🌐 ورود به پنل زرین‌پال",url="https://www.zarinpal.com",style="primary")],[btn("🔙 بازگشت به پنل","admin",style="primary")]])
+def fivesim_admin_kb(has): return markup([[btn("🔄 بروزرسانی اطلاعات 5Sim","panel_5sim",style="success")],[btn("✏️ ثبت / تغییر کلید API","aset:fivesim_api",style="primary")],[btn("🌐 ورود به سایت شماره مجازی",url="https://5sim.net",style="primary")],[btn("🔙 بازگشت به پنل","admin",style="primary")]])
+def price_admin_kb(): return markup([[btn("💱 نرخ تبدیل","aset:rate",style="primary"),btn("📈 درصد سود","aset:profit_percent",style="primary")],[btn("🛡 نگهبان نرخ دلار","market_admin",style="primary")],[btn("⬇️ حداقل شارژ","aset:min_deposit",style="primary"),btn("⬆️ حداکثر شارژ","aset:max_deposit",style="primary")],[btn("🎁 درصد پاداش دعوت","aset:referral_percent",style="primary")],[btn("🔙 بازگشت به پنل","admin",style="primary")]])
+def market_admin_kb(a,b): return admin_back("panel_price")
+def user_manage_kb(uid,banned): return markup([[btn("➕ افزایش موجودی",f"ubal:{uid}:add",style="success"),btn("➖ کسر موجودی",f"ubal:{uid}:sub",style="danger")],[btn("✅ رفع مسدودی" if banned else "🚫 مسدود کردن",f"uban:{uid}",style="danger")],[btn("🔍 جستجوی کاربر دیگر","adm_user",style="primary")],[btn("🔙 بازگشت به پنل","admin",style="primary")]])
+def broadcast_confirm_kb(): return markup([[btn("✅ ارسال برای همه","bc_send",style="success")],[btn("❌ انصراف","admin",style="danger")]])
 def sintel_main_menu(): return markup([[btn("🛒 انتخاب خدمات","sintel_telegram",style="success")],[btn("📦 سفارشات من","sintel_orders",style="primary")],[btn("🏠 منوی اصلی","home",style="primary")]])
 def sintel_platform_menu(p):
     from services.sintel_catalog import PLATFORM_LABELS
     e,t=PLATFORM_LABELS.get(p,("📱",p)); return markup([[btn(f"{e} {t}",f"stsc:{p}:all",style="danger")],_social_back("sintel")])
 _QUALITY=(("⭐ پریمیوم",("premium","vip","پریمیوم","ویژه")),("💎 واقعی",("real","واقعی","ایرانی","iran")),("🔥 کیفیت بالا",("hq","high quality","کیفیت بالا","باکیفیت","با کیفیت")),("💰 اقتصادی",("cheap","ارزان","اقتصادی","فیک","fake")))
 def _quality(s):
-    t=" ".join(str(s.get(k) or "") for k in ("display_name","name","description","provider_category")).lower()
-    return next((label for label,keys in _QUALITY if any(k in t for k in keys)),"✨ استاندارد")
+    t=" ".join(str(s.get(k) or "") for k in ("display_name","name","description","provider_category")).lower(); return next((label for label,keys in _QUALITY if any(k in t for k in keys)),"✨ استاندارد")
 def sintel_services_list(ss):
     rows=[]
     for s in ss:
-        cb=f"stlg:{s['service_id']}"; name=(s.get('display_name') or s.get('name') or 'سرویس')[:28]
-        rows.append([btn(name,cb,style=COLUMN_STYLES[0]),btn(_quality(s),cb,style=COLUMN_STYLES[1]),btn(f"حداقل {int(s.get('min_quantity') or 0):,}",cb,style=COLUMN_STYLES[2])])
+        cb=f"stlg:{s['service_id']}"; name=(s.get('display_name') or s.get('name') or 'سرویس')[:28]; rows.append([btn(name,cb,style=COLUMN_STYLES[0]),btn(_quality(s),cb,style=COLUMN_STYLES[1]),btn(f"حداقل {int(s.get('min_quantity') or 0):,}",cb,style=COLUMN_STYLES[2])])
     return markup(rows+[_social_back("sintel")])
 def sintel_confirm_kb(ok):
-    rows=[[btn("✅ تأیید سفارش","sintel_buy",style="success")] if ok else [btn("💳 شارژ کیف پول","sintel_wallet",style="success")]; rows.append(_social_back("sintel")); return markup(rows)
+    rows=([btn("✅ تأیید سفارش","sintel_buy",style="success")] if ok else [btn("💳 شارژ کیف پول","sintel_wallet",style="success")])
+    return markup([rows]+[_social_back("sintel")])
 def sintel_orders_kb(): return markup([[btn("🛒 خرید سرویس جدید","sintel",style="success")],[btn("🏠 منوی اصلی","home",style="primary")]])
 def sintel_order_detail_kb(i,s): return markup([[btn("🔄 بروزرسانی وضعیت",f"stch:{i}",style="primary")],_social_back("sintel_orders")])
-def sintel_admin_menu(s): return markup([[btn("🔑 تنطیم کلید API","sintel_set_api",style="primary")],[btn("🔌 بررسی اتصال پنلیکس","sintel_test_connection",style="primary")],[btn("📥 دریافت آخرین سرویس‌ها","sintel_sync_catalog",style="success")],[btn("🔄 بروزرسانی قیمت‌ها","panelix_prices",style="success")],[btn("📊 وضعیت همگام‌سازی","panelix_status",style="primary")],[btn("💰 تنطیم سود و قیمت فروش","panelix_set:panelix_profit_percent",style="primary")],[btn("💱 تنطیم واحد نرخ","panelix_set:panelix_rate_unit",style="primary"),btn("💵 تنطیم ارز","panelix_set:panelix_currency",style="primary")],[btn("⏱ تنطیم فاصله بروزرسانی","panelix_set:panelix_sync_interval",style="primary")],[btn("📋 گزارش خطاها","panelix_status",style="primary")],[btn("🔙 بازگشت به مدیریت پنلیکس","admin",style="primary")]])
+def sintel_admin_menu(s): return markup([[btn("🔑 تنظیم کلید API","sintel_set_api",style="primary")],[btn("🔌 بررسی اتصال پنلیکس","sintel_test_connection",style="primary")],[btn("📥 دریافت آخرین سرویس‌ها","sintel_sync_catalog",style="success")],[btn("🔄 بروزرسانی قیمت‌ها","panelix_prices",style="success")],[btn("📊 وضعیت همگام‌سازی","panelix_status",style="primary")],[btn("💰 تنظیم سود و قیمت فروش","panelix_set:panelix_profit_percent",style="primary")],[btn("💱 تنظیم واحد نرخ","panelix_set:panelix_rate_unit",style="primary"),btn("💵 تنظیم ارز","panelix_set:panelix_currency",style="primary")],[btn("⏱ تنظیم فاصله بروزرسانی","panelix_set:panelix_sync_interval",style="primary")],[btn("📋 گزارش خطاها","panelix_status",style="primary")],[btn("🔙 بازگشت به مدیریت پنلیکس","admin",style="primary")]])
 def sintel_catalog_menu(): return markup([[btn("📦 کاتالوگ خدمات","sintel_telegram",style="primary")],[btn("🔙 بازگشت به مدیریت پنلیکس","panel_sintel",style="primary")]])
 def sintel_admin_back(): return markup([[btn("🔙 بازگشت به مدیریت پنلیکس","panel_sintel",style="primary")]])
