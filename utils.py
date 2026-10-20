@@ -5,6 +5,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery
 import texts
 _DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+_COUNTRY_FA={"russia":"روسیه","usa":"آمریکا","england":"انگلیس","canada":"کانادا","germany":"آلمان","france":"فرانسه","netherlands":"هلند","italy":"ایتالیا","spain":"اسپانیا","portugal":"پرتغال","sweden":"سوئد","finland":"فنلاند","poland":"لهستان","romania":"رومانی","estonia":"استونی","latvia":"لتونی","lithuania":"لیتوانی","ukraine":"اوکراین","georgia":"گرجستان","armenia":"ارمنستان","azerbaijan":"آذربایجان","kazakhstan":"قزاقستان","uzbekistan":"ازبکستان","kyrgyzstan":"قرقیزستان","tajikistan":"تاجیکستان","turkey":"ترکیه","afghanistan":"افغانستان","pakistan":"پاکستان","india":"هند","bangladesh":"بنگلادش","china":"چین","hongkong":"هنگ‌کنگ","indonesia":"اندونزی","malaysia":"مالزی","philippines":"فیلیپین","vietnam":"ویتنام","thailand":"تایلند","cambodia":"کامبوج","myanmar":"میانمار","laos":"لائوس","egypt":"مصر","nigeria":"نیجریه","kenya":"کنیا","southafrica":"آفریقای جنوبی","morocco":"مراکش","ghana":"غنا","mexico":"مکزیک","brazil":"برزیل","colombia":"کلمبیا","argentina":"آرژانتین","chile":"شیلی","peru":"پرو","iraq":"عراق","saudiarabia":"عربستان سعودی","israel":"اسرائیل","japan":"ژاپن","southkorea":"کره جنوبی","australia":"استرالیا","belgium":"بلژیک","austria":"اتریش","czech":"جمهوری چک","greece":"یونان","ireland":"ایرلند","serbia":"صربستان","bulgaria":"بلغارستان","moldova":"مولداوی","belarus":"بلاروس","mongolia":"مغولستان","nepal":"نپال","srilanka":"سریلانکا"}
 def esc(value) -> str: return html.escape(str(value or ""))
 def phone_ltr(value) -> str: return "\u2066" + esc(str(value or "—")) + "\u2069"
 def to_en_digits(value: str) -> str: return (value or "").translate(_DIGITS)
@@ -19,7 +20,7 @@ def flag(iso: str) -> str:
     return "".join(chr(0x1F1E6+ord(ch)-ord("a")) for ch in iso)
 def country_title(code: str, countries: dict | None = None) -> str:
     info=(countries or {}).get(code) or {}; iso_map=info.get("iso") or {}; iso=next(iter(iso_map), "") if isinstance(iso_map,dict) else ""
-    name=texts.COUNTRY_EN.get(code) or info.get("text_en") or code.replace("_", " ").replace("-", " ").title()
+    name=_COUNTRY_FA.get(str(code).lower()) or texts.COUNTRY_FA.get(str(code).lower(), "") or texts.COUNTRY_EN.get(code) or info.get("text_en") or code.replace("_", " ").replace("-", " ").title()
     return f"{flag(iso)} {name}"
 def service_title(code: str) -> str:
     emoji,title=texts.SERVICE_MAP.get(code,("📱",code.capitalize())); return f"{emoji} {title}"
