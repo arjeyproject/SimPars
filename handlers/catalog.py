@@ -1,4 +1,4 @@
-"""Live storefront catalog: a dedicated platform page first, then countries."""
+"""Live storefront catalog: platform selection always comes before countries."""
 from __future__ import annotations
 from aiogram import F, Router
 from aiogram.types import CallbackQuery
@@ -11,7 +11,7 @@ from utils import safe_edit
 import texts
 router = Router(); MAX_PRODUCTS = 200; PRODUCT_PAGE_SIZE = 12
 PRIORITY = {"telegram": 0, "instagram": 1, "whatsapp": 2, "openai": 3, "google": 4, "tiktok": 5, "facebook": 6, "twitter": 7, "discord": 8}
-PLATFORM_PAGE = "🛍 <b>خرید شماره مجازی</b>\n\n✨ اول پلتفرم را انتخاب کن ، بعد کشور و قیمت را می‌بینی.\n⚡️ موجودی و قیمت‌ها لحطه‌ای است.\nصفحه {page} از {pages}\n\n👇 پلتفرم مورد نظرت را بزن:"
+PLATFORM_PAGE = "🛍 <b>خرید شماره مجازی</b>\n\n📱 <b>ابتدا برنامه را انتخاب کنید</b>\n\n✈️ تلگرام، 📸 اینستاگرام، 💚 واتساپ و سایر برنامه‌های موجود از سرویس فروش نمایش داده می‌شوند.\n⚡️ بعد از انتخاب برنامه، در صفحه بعد فقط کشورهای دارای موجودی و قیمت لحظه‌ای نشان داده می‌شود.\nصفحه {page} از {pages}\n\n👇 نام برنامه را انتخاب کنید:"
 def _products(catalog, category):
     products=[]
     for product, countries in catalog.items():
@@ -25,13 +25,15 @@ async def _show_platforms(call:CallbackQuery,category="economic",page=0):
     try: catalog=await fivesim.get_all_prices()
     except FiveSimError as exc: await safe_edit(call,humanize(exc),kb.back_main()); return
     if not catalog: await safe_edit(call,texts.NO_NUMBERS,kb.back_main()); return
-    products=_products(catalog,category); pages=max(1,(len(products)+PRODUCT_PAGE_SIZE-1)//PRODUCT_PAGE_SIZE); page=min(max(0,page),pages-1); chunk=products[page*PRODUCT_PAGE_SIZE:(page+1)*PRODUCT_PAGE_SIZE]
+    products=_products(catalog,category)
+    if not products: await safe_edit(call,texts.NO_NUMBERS,kb.back_main()); return
+    pages=max(1,(len(products)+PRODUCT_PAGE_SIZE-1)//PRODUCT_PAGE_SIZE); page=min(max(0,page),pages-1); chunk=products[page*PRODUCT_PAGE_SIZE:(page+1)*PRODUCT_PAGE_SIZE]
     await safe_edit(call,PLATFORM_PAGE.format(page=page+1,pages=pages),kb.platforms_kb(chunk,category,page,pages))
 @router.callback_query(F.data=="buy")
 async def live_buy_menu(call:CallbackQuery):
     if not await db.get_setting("fivesim_api"): await call.answer("اتصال فروشگاه در پنل مدیریت تنظیم نشده است.",show_alert=True); return
     if not await sales_allowed(): await call.answer("فروش موقتاً متوقف است؛ نرخ را در پنل مدیریت بررسی کن.",show_alert=True); return
-    await call.answer("در حال آماده‌سازی فروشگاه...")
+    await call.answer("در حال آماده‌سازی فهرست برنامه‌ها...")
     await _show_platforms(call,"economic",0)
 @router.callback_query(F.data.startswith("cat:"))
 async def catalog_category(call:CallbackQuery):
