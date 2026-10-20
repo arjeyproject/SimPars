@@ -5,14 +5,14 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 import texts
 from config import CHANNEL_USERNAME, INSTAGRAM_ID, OWNER_USERNAME
 CHANNEL_URL="https://t.me/"+CHANNEL_USERNAME.lstrip("@"); OWNER_URL=f"https://t.me/{OWNER_USERNAME.lstrip('@')}"; INSTAGRAM_URL=f"https://instagram.com/{INSTAGRAM_ID.lstrip('@')}"
-# هر ستون یک رنگ ثابت دارد تا شبکه سه‌ستونه مرتب و خوانا باشد.
+# Telegram inline buttons do not support custom background colours. These markers
+# provide a stable green/blue/orange visual key for the three country columns.
 COLUMN_STYLES=("primary","success","danger")
-# اموجی اختصاصی و متفاوت برای هر پلتفرم.
+COUNTRY_COLUMN_MARKERS=("🟩","🟦","🟧")
 PLATFORM_EMOJI={"telegram":"✈️","instagram":"🌸","whatsapp":"💚","openai":"🤖","google":"🔎","facebook":"📘","twitter":"🐦","tiktok":"🎵","discord":"🎮","microsoft":"🪟","amazon":"📦","snapchat":"👻","viber":"🪻","signal":"🛡","linkedin":"💼","yahoo":"📨","netflix":"🎬","paypal":"💳","steam":"🕹","imo":"🗨","line":"🫧","wechat":"🧧","uber":"🚕","apple":"🍏","yandex":"🟥","binance":"🪙","ebay":"🛍","airbnb":"🏠","spotify":"🎧","twitch":"🟪","mailru":"📬","proton":"🔐","bolt":"⚡️","revolut":"🏦","tinder":"🔥","bumble":"🐝","nike":"👟","other":"🌐"}
 def btn(text,callback=None,url=None,*,style=None,icon_custom_emoji_id=None): return InlineKeyboardButton(text=text,url=url,callback_data=None if url else (callback or "noop"),style=style,icon_custom_emoji_id=icon_custom_emoji_id)
 def markup(rows): return InlineKeyboardMarkup(inline_keyboard=rows)
 def onoff(value): return "✅ روشن" if value=="1" else "❌ خاموش"
-def _social_back(callback="sintel",back_style="primary"): return [btn("🔙 بازگشت",callback,style=back_style),btn("🏠 منوی اصلی","home",style="primary")]
 def main_menu(is_admin=False):
     rows=[[btn("📱 خرید شماره مجازی","buy",style="success")],[btn("📣 خدمات شبکه‌های اجتماعی","sintel",style="success")],[btn("💰 کیف پول","wallet",style="primary"),btn("👤 حساب من","account",style="primary")],[btn("📦 سفارش‌های من","orders",style="primary"),btn("📦 سفارشات خدمات","sintel_orders",style="primary")],[btn("🎁 دعوت دوستان","referral",style="primary"),btn("💬 پشتیبانی","support",style="primary")],[btn("📚 راهنما","help",style="primary")],[btn("📢 کانال ما",url=CHANNEL_URL,style="danger"),btn("📸 اینستاگرام",url=INSTAGRAM_URL,style="danger")]]
     if is_admin: rows.append([btn("⚙️ پنل مدیریت","admin",style="primary")])
@@ -26,12 +26,11 @@ def _platform_name(p):
     code=str(p or "").strip().lower(); emoji,title=texts.SERVICE_MAP.get(code,(None,code.replace("_"," ").replace("-"," ").title()))
     return f"{PLATFORM_EMOJI.get(code) or emoji or '🔸'} {title}"
 def _platform_grid(products,category):
-    """شبکه سه‌ستونهٔ پلتفرم‌ها؛ رنگ هر ستون ثابت است."""
+    """سه‌ستونه و بر پایهٔ پلتفرم‌های واقعاً برگشتی از کاتالوگ provider."""
     products=list(products or []); rows=[]
     for i in range(0,len(products),3): rows.append([btn(_platform_name(p),f"srv:{p}:0:{category}",style=COLUMN_STYLES[col]) for col,p in enumerate(products[i:i+3])])
     return rows
 def platforms_kb(products,category="economic",page=0,pages=1):
-    """صفحهٔ انتخاب پلتفرم (تلگرام، اینستاگرام، ...) با چیدمان سه‌ستونه."""
     rows=_platform_grid(products,category); nav=[]
     if page>0: nav.append(btn("⬅️ صفحه قبل",f"cat:{category}:{page-1}",style="primary"))
     if pages>1:
@@ -41,11 +40,19 @@ def platforms_kb(products,category="economic",page=0,pages=1):
 def storefront_kb(products=None): return platforms_kb(products)
 def product_kb(products,category="economic",page=0,pages=1): return platforms_kb(products,category,page,pages)
 def countries_kb(product,items,page=0,pages=1):
-    """هر ردیف سه ستون: نام کشور | قیمت | خرید — رنگ هر ستون ثابت."""
-    rows=[[btn(name,cb,style=COLUMN_STYLES[0]),btn(price,cb,style=COLUMN_STYLES[1]),btn("🛒 خرید",cb,style=COLUMN_STYLES[2])] for name,price,cb in items]; nav=[]
+    """اطلاعات هر کشور در سه ستون ثابت: کشور، قیمت، خرید.
+    Telegram رنگ پس‌زمینهٔ سفارشی ندارد، پس نشانگرهای سبز/آبی/نارنجی را به‌کار می‌بریم.
+    همهٔ سه دکمهٔ یک ردیف callback یکسان و مخصوص همان کشور دارند.
+    """
+    rows=[]
+    for row_index,(name,price,cb) in enumerate(items):
+        marker=COUNTRY_COLUMN_MARKERS[row_index % len(COUNTRY_COLUMN_MARKERS)]
+        rows.append([btn(f"{marker} {name}",cb,style="primary"),btn(f"💰 {price}",cb,style="success"),btn("🛒 خرید",cb,style="danger")])
+    nav=[]
     if page>0: nav.append(btn("⬅️ صفحه قبل",f"srv:{product}:{page-1}:economic",style="primary"))
-    if pages>1: nav.append(btn(f"📄 {page+1}/{pages}","noop",style="primary"))
-    if page<pages-1: nav.append(btn("صفحه بعد ➡️",f"srv:{product}:{page+1}:economic",style="primary"))
+    if pages>1:
+        nav.append(btn(f"📄 {page+1}/{pages}","noop",style="primary"))
+        if page<pages-1: nav.append(btn("صفحه بعد ➡️",f"srv:{product}:{page+1}:economic",style="primary"))
     return markup(rows+([nav] if nav else [])+[_social_back("buy",back_style="danger")])
 def operators_kb(product,country,items,page,pages): return markup([[btn(str(page*12+i+1),f"op:{product}:{country}:{page*12+i}",style=("danger" if i//2%2==0 else "success")) for i in range(min(4,len(items)))],_social_back("buy")])
 def confirm_kb(product,country,operator,enough):
@@ -58,14 +65,6 @@ def wallet_kb(): return markup([[btn("💵 ۵۰٬۰۰۰ تومان","dep:50000",
 def payment_kb(url,i): return markup([[btn("💳 پرداخت آنلاین",url=url,style="success")],[btn("✅ پرداخت کردم، بررسی شود",f"vfy:{i}",style="success")],[btn("🏠 منوی اصلی","home",style="primary")]])
 def support_kb(): return markup([[btn("💬 ارتباط با پشتیبانی",url=OWNER_URL,style="primary")],[btn("📢 کانال",url=CHANNEL_URL,style="success"),btn("📸 اینستاگرام",url=INSTAGRAM_URL,style="success")],[btn("🏠 منوی اصلی","home",style="primary")]])
 def referral_kb(link): return markup([[btn("📤 اشتراک‌گذاری لینک",url=f"https://t.me/share/url?url={quote(link)}&text={quote('با سیم‌پارس شماره مجازی بگیر!')}",style="success")],[btn("🏠 منوی اصلی","home",style="primary")]])
-def admin_menu(f,m): return markup([[btn("📊 آمار و گزارشات","adm_stats",style="primary")],[btn("⚙️ مدیریت پنلیکس","panel_sintel",style="success")],[btn("🔑 تنطیمات شماره مجازی","panel_5sim",style="primary"),btn("💳 درگاه زرین‌پال","panel_zibal",style="primary")],[btn("💹 قیمت‌گذاری و مالی","panel_price",style="primary"),btn("👥 مدیریت کاربران","adm_user",style="primary")],[btn("📢 پیام همگانی","adm_bc",style="primary"),btn("📝 متن پشتیبانی","aset:support_text",style="primary")],[btn(f"🔒 جوین اجباری: {onoff(f)}","atog:force_join",style="primary")],[btn("📢 کانال قفل اجباری","channel_admin",style="primary")],[btn(f"🛠 حالت تعمیرات: {onoff(m)}","atog:maintenance",style="danger")],[btn("🏠 منوی اصلی ربات","home",style="primary")]])
-def admin_back(c="admin"): return markup([[btn("🔙 بازگشت به پنل",c,style="primary")]])
-def fivesim_admin_kb(has): return markup([[btn("🔄 بروزرسانی اطلاعات 5Sim","panel_5sim",style="success")],[btn("✏️ ثبت / تغییر کلید API","aset:fivesim_api",style="primary")],[btn("🌐 ورود به سایت شماره مجازی",url="https://5sim.net",style="primary")],[btn("🔙 بازگشت به پنل","admin",style="primary")]])
-def zibal_admin_kb(sandbox,has): return markup([[btn("✏️ ثبت / تغییر مرچنت","aset:zibal_merchant",style="primary")],[btn(f"🧪 حالت تست: {onoff(sandbox)}","atog:zibal_sandbox",style="primary")],[btn("🌐 ورود به پنل زرین‌پال",url="https://www.zarinpal.com",style="primary")],[btn("🔙 بازگشت به پنل","admin",style="primary")]])
-def price_admin_kb(): return markup([[btn("💱 نرخ تبدیل","aset:rate",style="primary"),btn("📈 درصد سود","aset:profit_percent",style="primary")],[btn("🛡 نگهبان نرخ دلار","market_admin",style="primary")],[btn("⬇️ حداقل شارژ","aset:min_deposit",style="primary"),btn("⬆️ حداکثر شارژ","aset:max_deposit",style="primary")],[btn("🎁 درصد پاداش دعوت","aset:referral_percent",style="primary")],[btn("🔙 بازگشت به پنل","admin",style="primary")]])
-def market_admin_kb(a,b): return admin_back("panel_price")
-def user_manage_kb(uid,banned): return markup([[btn("➕ افزایش موجودی",f"ubal:{uid}:add",style="success"),btn("➖ کسر موجودی",f"ubal:{uid}:sub",style="danger")],[btn("✅ رفع مسدودی" if banned else "🚫 مسدود کردن",f"uban:{uid}",style="danger")],[btn("🔍 جستجوی کاربر دیگر","adm_user",style="primary")],[btn("🔙 بازگشت به پنل","admin",style="primary")]])
-def broadcast_confirm_kb(): return markup([[btn("✅ ارسال برای همه","bc_send",style="success")],[btn("❌ انصراف","admin",style="danger")]])
 def sintel_main_menu(): return markup([[btn("🛒 انتخاب خدمات","sintel_telegram",style="success")],[btn("📦 سفارشات من","sintel_orders",style="primary")],[btn("🏠 منوی اصلی","home",style="primary")]])
 def sintel_platform_menu(p):
     from services.sintel_catalog import PLATFORM_LABELS
