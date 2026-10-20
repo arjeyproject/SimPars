@@ -41,13 +41,12 @@ def storefront_kb(products=None): return platforms_kb(products)
 def product_kb(products,category="economic",page=0,pages=1): return platforms_kb(products,category,page,pages)
 def countries_kb(product,items,page=0,pages=1):
     """اطلاعات هر کشور در سه ستون ثابت: کشور، قیمت، خرید.
-    Telegram رنگ پس‌زمینهٔ سفارشی ندارد، پس نشانگرهای سبز/آبی/نارنجی را به‌کار می‌بریم.
+    Telegram رنگ پس‌زمینهٔ سفارشی ندارد؛ نشانگر هر ستون رنگ معنایی آن را مشخص می‌کند.
     همهٔ سه دکمهٔ یک ردیف callback یکسان و مخصوص همان کشور دارند.
     """
     rows=[]
-    for row_index,(name,price,cb) in enumerate(items):
-        marker=COUNTRY_COLUMN_MARKERS[row_index % len(COUNTRY_COLUMN_MARKERS)]
-        rows.append([btn(f"{marker} {name}",cb,style="primary"),btn(f"💰 {price}",cb,style="success"),btn("🛒 خرید",cb,style="danger")])
+    for name,price,cb in items:
+        rows.append([btn(f"{COUNTRY_COLUMN_MARKERS[0]} {name}",cb,style="primary"),btn(f"{COUNTRY_COLUMN_MARKERS[1]} {price}",cb,style="success"),btn(f"{COUNTRY_COLUMN_MARKERS[2]} خرید",cb,style="danger")])
     nav=[]
     if page>0: nav.append(btn("⬅️ صفحه قبل",f"srv:{product}:{page-1}:economic",style="primary"))
     if pages>1:
