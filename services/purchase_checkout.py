@@ -87,16 +87,25 @@ async def finish_paid_purchase(bot:Bot,payment,payload:dict,ref:str)->tuple[bool
     user_id=int(payment["user_id"]); paid=int(payment["amount"]); refund_note=f"مبلغ <b>{paid:,} تومان</b> به کیف پولت برگشت خورد."
     coupon_code=(payload.get("coupon") or "").strip().upper()
     try: _,operator,_=await resolve({**payload,"coupon":""})
-    except Exception as exc: log.warning("paid purchase resolve failed: %s",exc); return False,f"پرداخت تأیید شد اما این شماره موجود نیست.\n{refund_note}",None
+    except Exception as exc:
+        log.warning("paid purchase resolve failed: %s",exc)
+        # Payment is already verified at this point. If inventory disappeared
+        # before order reservation, credit the exact paid amount back instead
+        # of only telling the buyer that a refund happened.
+        try: await db.add_balance(user_id,paid)
+        except Exception:
+            log.exception("paid purchase refund failed: user=%s amount=%s",user_id,paid)
+            return False,"پرداخت تأیید شد اما موجودی شماره مشخص نشد و بازگشت مبلغ نیازمند بررسی پشتیبانی است؛ لطفاً خرید را دوباره انجام نده.",None
+        return False,f"پرداخت تأیید شد اما این شماره موجود نیست.{chr(10)}{refund_note}",None
     payload={**payload,"operator":operator}; order_id,created=await reserve_order(user_id,payload,paid,wallet=False)
     if not created:return False,"این پرداخت در حال بررسی است؛ خرید دوباره انجام نده.",order_id
     token=await db.get_setting("fivesim_api")
-    if not token: await refund_reserved_order(order_id); return False,f"پرداخت تأیید شد اما فروشگاه موقتاً در دسترس نیست.\n{refund_note}",None
+    if not token: await refund_reserved_order(order_id); return False,f"پرداخت تأیید شد اما فروشگاه موقتاً در دسترس نیست.{chr(10)}{refund_note}",None
     try:data=await FiveSimClient(token).buy(payload["country"],operator,payload["product"])
     except PurchaseUnknownError:
         log.error("ambiguous paid purchase: user=%s order=%s",user_id,order_id); return False,"پرداخت تأیید شد اما پاسخ سرویس نامشخص است؛ خرید دوباره انجام نده.",order_id
     except FiveSimError as exc:
-        await refund_reserved_order(order_id); log.warning("paid purchase failed: %s",exc); return False,f"پرداخت تأیید شد اما سفارش انجام نشد.\n{refund_note}",None
+        await refund_reserved_order(order_id); log.warning("paid purchase failed: %s",exc); return False,f"پرداخت تأیید شد اما سفارش انجام نشد.{chr(10)}{refund_note}",None
     if not await complete_reserved_order(order_id,data,operator): return False,"پرداخت تأیید شد اما ثبت سفارش نیازمند بررسی است؛ خرید دوباره انجام نده.",order_id
     if coupon_code:
         try: await coupons.consume(coupon_code)
