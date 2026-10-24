@@ -17,7 +17,7 @@ async def _options(product, use_cache):
     except FiveSimError as exc:
         log.debug("options lookup failed product=%s cache=%s: %s", product, use_cache, exc); return {}
 async def country_options(product, country):
-    """Return usable operators, falling back to the validated price catalog."""
+    """Return usable operators, falling back through both 5SIM catalog shapes."""
     for use_cache in (True, False):
         values = pick(await _options(product, use_cache), country)
         if values: return list(values)
@@ -29,8 +29,16 @@ async def country_options(product, country):
             fivesim._options_cache[product] = (time.time(), fresh)
             values = pick(fresh, country)
             if values: return list(values)
-    # The price catalog has already validated operator, cost, and stock. Use it
-    # as the final read-only fallback when the options response shape differs.
+    # The filtered product endpoint can be empty when 5SIM responds in its
+    # country -> product -> operator shape. Normalize the full catalog as a
+    # final fallback, just like the country list does.
+    try:
+        catalog = await fivesim.get_all_prices(use_cache=False)
+        best = pick(pick(catalog, product), country)
+        if isinstance(best, (tuple, list)) and len(best) >= 3 and best[2] > 0:
+            return [(str(best[0]), float(best[1]), int(best[2]))]
+    except FiveSimError as exc: log.debug("full catalog fallback failed: %s", exc)
+    # Retain the previously validated product-price fallback for older API responses.
     try:
         prices = await fivesim.get_product_prices(product, use_cache=False)
         best = pick(prices, country)
