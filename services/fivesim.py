@@ -134,6 +134,14 @@ class FiveSimClient:
         self.token=_token(token)
         if not self.token:raise FiveSimError("unauthorized")
     async def profile(self):return await _request("/user/profile",self.token)
+    async def _order_action(self,action,order_id):
+        try: order_id=int(order_id)
+        except (TypeError,ValueError) as exc: raise FiveSimError("invalid order id") from exc
+        if order_id<=0: raise FiveSimError("invalid order id")
+        return await _request(f"/user/{action}/{order_id}",self.token)
+    async def check(self,order_id):return await self._order_action("check",order_id)
+    async def cancel(self,order_id):return await self._order_action("cancel",order_id)
+    async def finish(self,order_id):return await self._order_action("finish",order_id)
     async def buy(self,country,operator,product):
         selected=str(operator or "").strip()
         if not selected or selected.lower()=="any":raise FiveSimError("bad operator: a pinned operator is required")

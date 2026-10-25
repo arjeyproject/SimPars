@@ -35,20 +35,20 @@ def platforms_kb(products,category="economic",page=0,pages=1):
     return markup(rows+([nav] if nav else [])+[_social_back("home",back_style="danger")])
 def storefront_kb(products=None): return platforms_kb(products)
 def product_kb(products,category="economic",page=0,pages=1): return platforms_kb(products,category,page,pages)
-def countries_kb(product,items,page=0,pages=1):
+def countries_kb(product,items,page=0,pages=1,category="economic"):
     rows=[]
     for name,price,cb in items: rows.append([btn(f"🟩 {name}",cb,style="primary"),btn(f"🟦 {price}",cb,style="success"),btn(f"🟧 خرید",cb,style="danger")])
     nav=[]
-    if page>0: nav.append(btn("⬅️ صفحه قبل",f"srv:{product}:{page-1}:economic",style="primary"))
+    if page>0: nav.append(btn("⬅️ صفحه قبل",f"srv:{product}:{page-1}:{category}",style="primary"))
     if pages>1:
         nav.append(btn(f"📄 {page+1}/{pages}","noop",style="primary"))
-        if page<pages-1: nav.append(btn("صفحه بعد ➡️",f"srv:{product}:{page+1}:economic",style="primary"))
+        if page<pages-1: nav.append(btn("صفحه بعد ➡️",f"srv:{product}:{page+1}:{category}",style="primary"))
     return markup(rows+([nav] if nav else [])+[_social_back("buy",back_style="danger")])
 def operators_kb(product,country,items,page,pages): return markup([[btn(str(page*12+i+1),f"op:{product}:{country}:{page*12+i}",style=("danger" if i//2%2==0 else "success")) for i in range(min(4,len(items)))],_social_back("buy")])
 def confirm_kb(product,country,operator,enough):
     rows=[[btn("✅ تأیید و خرید",f"ok:{product}:{country}:{operator}",style="success")]]
     if not enough: rows.append([btn("💳 شارژ کیف پول","wallet",style="success")])
-    return markup(rows+[[btn("🏠 منوی اصلی","home",style="primary")]])
+    rows.append([btn("🏠 منوی اصلی","home",style="primary")]); return markup(rows)
 def order_kb(i): return markup([[btn("🔄 بررسی وضعیت",f"stch:{i}",style="primary")],[btn("❌ لغو و بررسی بازگشت وجه",f"cnl:{i}",style="danger")]])
 def order_received_kb(i): return order_kb(i)
 def wallet_kb(): return markup([[btn("💵 ۵۰٬۰۰۰ تومان","dep:50000",style="success"),btn("💵 ۱۰۰٬۰۰۰ تومان","dep:100000",style="success")],[btn("💵 ۲۰۰٬۰۰۰ تومان","dep:200000",style="success"),btn("💵 ۵۰۰٬۰۰۰ تومان","dep:500000",style="success")],[btn("✍️ مبلغ دلخواه","dep_custom",style="primary")],[btn("🏠 منوی اصلی","home",style="primary")]])
